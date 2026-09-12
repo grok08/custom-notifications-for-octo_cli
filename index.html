@@ -1,0 +1,1415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Context-aware Windows desktop notifications for GitHub Copilot CLI using hooks, PowerShell, Win32 APIs, Windows UI Automation, and BurntToast.">
+<title>Copilot CLI — Context-Aware Windows Notifications</title>
+<style>
+:root{--bg:#f5f5f7;--surface:rgba(255,255,255,.78);--surface-solid:#fff;--text:#1d1d1f;--muted:#6e6e73;--hairline:rgba(0,0,0,.08);--accent:#0071e3;--accent-2:#34aadc;--green:#30d158;--shadow:0 20px 60px rgba(0,0,0,.08);--radius:28px;--code:#101113;--code-text:#f5f5f7}
+:root.dark{--bg:#0b0c0f;--surface:rgba(28,29,33,.78);--surface-solid:#1c1d21;--text:#f5f5f7;--muted:#a1a1a6;--hairline:rgba(255,255,255,.1);--accent:#2997ff;--accent-2:#64d2ff;--green:#30d158;--shadow:0 20px 80px rgba(0,0,0,.28);--code:#08090b;--code-text:#f5f5f7}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Inter,system-ui,sans-serif;color:var(--text);background:radial-gradient(circle at 20% 0%,rgba(0,113,227,.11),transparent 32rem),radial-gradient(circle at 95% 12%,rgba(52,170,220,.12),transparent 30rem),var(--bg);line-height:1.62}
+a{color:inherit;text-decoration:none}button{font:inherit}.container{max-width:1240px;margin:0 auto;padding:0 28px}
+.topbar{position:sticky;top:0;z-index:50;backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);background:color-mix(in srgb,var(--surface-solid) 78%,transparent);border-bottom:1px solid var(--hairline)}
+.topbar-inner{height:64px;display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:-.02em}.brand-mark{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));box-shadow:0 8px 20px rgba(0,113,227,.24);display:grid;place-items:center;color:#fff;font-size:13px}.actions{display:flex;gap:8px;align-items:center}
+.icon-btn{position:relative}
+.icon-btn[title]::after{
+  content:attr(title);
+  position:absolute;right:0;top:calc(100% + 9px);
+  padding:6px 9px;border-radius:9px;
+  background:var(--text);color:var(--surface-solid);
+  font-size:11px;white-space:nowrap;
+  opacity:0;pointer-events:none;transform:translateY(-3px);
+  transition:opacity .18s ease,transform .18s ease;
+}
+.icon-btn[title]:hover::after,.icon-btn[title]:focus-visible::after{
+  opacity:1;transform:translateY(0);
+}
+.icon-btn,.pill-btn{border:1px solid var(--hairline);background:var(--surface);color:var(--text);border-radius:999px;padding:9px 13px;cursor:pointer;transition:transform .2s ease,background .2s ease,border-color .2s ease}.icon-btn:hover,.pill-btn:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 40%,var(--hairline))}
+.hero{padding:100px 0 56px}.eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:12px;color:var(--accent);font-weight:700}h1{font-size:clamp(44px,7vw,86px);line-height:.98;letter-spacing:-.06em;max-width:900px;margin:18px 0 24px;font-weight:760}.hero-copy{max-width:760px;color:var(--muted);font-size:20px;letter-spacing:-.015em}.hero-meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}.chip{border:1px solid var(--hairline);background:var(--surface);border-radius:999px;padding:8px 12px;color:var(--muted)}
+.hero-architecture{display:flex;align-items:center;gap:0;margin:54px 0 12px;overflow-x:auto;padding:20px 4px 28px;scrollbar-width:none}.hero-architecture::-webkit-scrollbar{display:none}.flow-node{flex:0 0 176px;padding:18px;border:1px solid var(--hairline);background:var(--surface);border-radius:22px;box-shadow:var(--shadow);position:relative;overflow:hidden;transform:translateY(0);transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s ease}.flow-node:hover{transform:translateY(-6px) scale(1.01);box-shadow:0 24px 70px rgba(0,0,0,.12)}.flow-node:after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent,rgba(255,255,255,.22),transparent);transform:translateX(-100%);animation:shine 5s infinite}.flow-node span{display:block;color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.08em;margin-bottom:10px}.flow-node b{display:block;font-size:17px;letter-spacing:-.02em}.flow-node small{color:var(--muted);display:block;margin-top:6px}.flow-node.accent{background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 10%,var(--surface-solid)),var(--surface))}.flow-node.result{background:linear-gradient(145deg,color-mix(in srgb,var(--green) 12%,var(--surface-solid)),var(--surface))}.flow-line{flex:0 0 54px;height:2px;background:var(--hairline);position:relative;overflow:hidden}.flow-line i{position:absolute;left:-25%;top:0;width:25%;height:100%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:flow 2.2s linear infinite}@keyframes flow{from{left:-25%}to{left:100%}}@keyframes shine{0%,60%,100%{transform:translateX(-120%)}75%{transform:translateX(120%)}}
+.grid{display:grid;grid-template-columns:280px minmax(0,1fr);gap:44px;align-items:start}.sidebar{position:sticky;top:88px;align-self:start}.sidebar-card{padding:18px;border:1px solid var(--hairline);background:var(--surface);border-radius:22px}.sidebar-title{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;margin-bottom:10px}.toc{display:flex;flex-direction:column;gap:3px;max-height:70vh;overflow:auto}.toc-link{color:var(--muted);font-size:13px;padding:8px 10px;border-radius:10px;transition:color .2s ease,background .2s ease}.toc-link:hover,.toc-link.active{color:var(--text);background:color-mix(in srgb,var(--accent) 8%,transparent)}.toc-link.depth-2{padding-left:22px;font-size:12px}.content{min-width:0}.callout{margin:0 0 44px;padding:24px 26px;border-radius:24px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 9%,var(--surface-solid)),var(--surface-solid));border:1px solid color-mix(in srgb,var(--accent) 16%,var(--hairline))}
+h2{font-size:34px;line-height:1.08;letter-spacing:-.035em;margin:58px 0 14px}h3{font-size:20px;line-height:1.15;letter-spacing:-.025em;margin:30px 0 8px}p,li{font-size:16px}p,li{color:var(--muted)}strong{color:var(--text)}blockquote{margin:24px 0;padding:18px 22px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 18px 18px 0}
+pre{position:relative;overflow:auto;padding:24px;padding-top:44px;border-radius:20px;background:var(--code);color:var(--code-text);box-shadow:0 14px 45px rgba(0,0,0,.13);font-size:12px;line-height:1.65}code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}:not(pre)>code{background:color-mix(in srgb,var(--text) 6%,transparent);padding:2px 6px;border-radius:7px;font-size:.9em}.copy-btn{position:absolute;right:12px;top:10px;z-index:2;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.16);padding:6px 10px;border-radius:999px;font-size:12px;cursor:pointer;transition:background .2s ease}.copy-btn:hover{background:rgba(255,255,255,.18)}
+table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;background:var(--surface);border:1px solid var(--hairline);border-radius:18px;margin:18px 0 28px}th,td{padding:13px 14px;border-bottom:1px solid var(--hairline);text-align:left;vertical-align:top}th{color:var(--text);font-weight:650;background:color-mix(in srgb,var(--text) 4%,transparent)}td{color:var(--muted)}tr:last-child td{border-bottom:0}
+.event-section{margin:58px 0 20px}.event-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.event-card{padding:20px;border:1px solid var(--hairline);background:var(--surface);border-radius:22px;min-height:285px;position:relative;overflow:hidden;transition:transform .32s cubic-bezier(.2,.8,.2,1),border-color .25s ease}.event-card:hover{transform:translateY(-7px);border-color:color-mix(in srgb,var(--accent) 30%,var(--hairline))}.event-top{display:flex;justify-content:space-between;align-items:center}.event-code{font:12px/1.2 "SFMono-Regular",Consolas,monospace;color:var(--accent)}.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 6px color-mix(in srgb,var(--green) 12%,transparent)}.event-card h3{font-size:21px;margin-top:22px}.toast-preview{margin-top:22px;padding:15px;border:1px solid var(--hairline);border-radius:16px;background:color-mix(in srgb,var(--surface-solid) 80%,transparent)}.toast-app{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px}.toast-preview strong,.toast-preview span{display:block}.toast-preview span{color:var(--muted);font-size:13px;margin-top:3px}
+.interactive-panel{margin:46px 0;border:1px solid var(--hairline);background:var(--surface);border-radius:26px;overflow:hidden}.panel-head{padding:20px 22px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;justify-content:space-between;gap:14px}.panel-title{font-weight:700;letter-spacing:-.02em}.tabbar{display:flex;gap:6px;padding:12px 14px;border-bottom:1px solid var(--hairline);overflow:auto}.tab-btn{border:0;background:transparent;color:var(--muted);padding:9px 13px;border-radius:999px;cursor:pointer;white-space:nowrap}.tab-btn.active{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:650}.tab-panel{display:none;padding:22px}.tab-panel.active{display:block;animation:panelIn .35s ease}@keyframes panelIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.search-overlay{position:fixed;inset:0;background:rgba(0,0,0,.38);backdrop-filter:blur(10px);display:none;align-items:flex-start;justify-content:center;padding:11vh 20px;z-index:100}.search-box{width:min(760px,100%);background:var(--surface-solid);border:1px solid var(--hairline);border-radius:26px;box-shadow:0 30px 100px rgba(0,0,0,.24);overflow:hidden}.search-input{width:100%;border:0;outline:0;background:transparent;color:var(--text);padding:20px 22px;font-size:20px;border-bottom:1px solid var(--hairline)}.search-results{max-height:60vh;overflow:auto}.search-result{padding:14px 22px;border-bottom:1px solid var(--hairline);cursor:pointer}.search-result small{color:var(--muted);display:block;margin-top:3px}
+footer{padding:72px 0 90px;color:var(--muted);font-size:13px}.footer-grid{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;border-top:1px solid var(--hairline);padding-top:24px}.reveal{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.8,.2,1)}.reveal.in{opacity:1;transform:none}.no-motion *,.no-motion *:before,.no-motion *:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+@media(max-width:980px){.grid{grid-template-columns:1fr}.sidebar{position:relative;top:auto}.toc{max-height:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.event-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.container{padding:0 18px}.hero{padding-top:70px}.hero-copy{font-size:17px}.event-grid{grid-template-columns:1fr}.toc{grid-template-columns:1fr}h2{font-size:28px}}
+</style>
+</head>
+<body>
+<header class="topbar"><div class="container topbar-inner"><a href="#top" class="brand"><span class="brand-mark">⌘</span><span>Copilot CLI · Notification System</span></a><div class="actions"><button class="pill-btn" id="searchBtn" type="button">Search</button><button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle theme">◐</button><button class="icon-btn" id="motionBtn" type="button" aria-label="Reduce motion" title="Reduce motion">⌁</button></div></div></header>
+
+<main id="top">
+<section class="hero"><div class="container"><div class="eyebrow">Engineering case study</div><h1>Context-aware Windows notifications for GitHub Copilot CLI.</h1><p class="hero-copy">A native-hook + Windows automation layer that knows when Copilot needs your attention — and when you are already looking at the exact Copilot tab.</p><div class="hero-meta"><span class="chip">Copilot CLI hooks</span><span class="chip">PowerShell</span><span class="chip">Win32</span><span class="chip">UI Automation</span><span class="chip">Windows Terminal</span><span class="chip">BurntToast</span></div>
+
+<section class="hero-architecture reveal" aria-label="System architecture">
+  <div class="flow-node accent"><span>01</span><b>Copilot CLI</b><small>native lifecycle event</small></div>
+  <div class="flow-line"><i></i></div>
+  <div class="flow-node"><span>02</span><b>Hooks</b><small>notification-hooks.json</small></div>
+  <div class="flow-line"><i></i></div>
+  <div class="flow-node"><span>03</span><b>PowerShell</b><small>copilot-notify.ps1</small></div>
+  <div class="flow-line"><i></i></div>
+  <div class="flow-node"><span>04</span><b>Windows context</b><small>Win32 + UI Automation</small></div>
+  <div class="flow-line"><i></i></div>
+  <div class="flow-node result"><span>05</span><b>Toast</b><small>BurntToast</small></div>
+</section>
+
+</div></section>
+
+<section class="container"><div class="callout reveal"><strong>The key idea</strong><p style="margin:.45rem 0 0">Copilot CLI already exposes lifecycle events. The custom layer decides whether those events should interrupt the user based on the actual foreground application and the selected Windows Terminal tab.</p></div></section>
+
+<section class="container grid"><aside class="sidebar"><div class="sidebar-card"><div class="sidebar-title">On this page</div><nav class="toc" id="toc"><a href="#1-purpose" class="toc-link depth-1">1. Purpose</a><a href="#2-what-is-native-copilot-cli-functionality-vs-what-we-built" class="toc-link depth-1">2. What is native Copilot CLI functionality vs. what we built</a><a href="#native-copilot-cli" class="toc-link depth-2">Native Copilot CLI</a><a href="#custom-functionality-built-here" class="toc-link depth-2">Custom functionality built here</a><a href="#permission-prompt" class="toc-link depth-2">permission_prompt</a><a href="#agent-completed" class="toc-link depth-2">agent_completed</a><a href="#elicitation-dialog" class="toc-link depth-2">elicitation_dialog</a><a href="#agentstop" class="toc-link depth-2">agentStop</a><a href="#scenario-a-copilot-tab-remains-visible" class="toc-link depth-2">Scenario A — Copilot tab remains visible</a><a href="#scenario-b-another-windows-terminal-tab-becomes-active" class="toc-link depth-2">Scenario B — Another Windows Terminal tab becomes active</a><a href="#scenario-c-another-application-becomes-active" class="toc-link depth-2">Scenario C — Another application becomes active</a><a href="#burnttoast" class="toc-link depth-1">BurntToast</a><a href="#hook-directory" class="toc-link depth-1">Hook directory</a><a href="#toast-appears-while-copilot-tab-is-visible" class="toc-link depth-1">Toast appears while Copilot tab is visible</a><a href="#toast-never-appears" class="toc-link depth-1">Toast never appears</a><a href="#copilot-tab-title-changes-unexpectedly" class="toc-link depth-1">Copilot tab title changes unexpectedly</a><a href="#wt-session-is-empty" class="toc-link depth-1">WT_SESSION is empty</a><a href="#copilot-cli" class="toc-link depth-2">Copilot CLI</a><a href="#hook-configuration" class="toc-link depth-2">Hook configuration</a><a href="#notification-script" class="toc-link depth-2">Notification script</a><a href="#burnttoast-2" class="toc-link depth-2">BurntToast</a><a href="#windows-terminal-dependency" class="toc-link depth-2">Windows Terminal dependency</a><a href="#stable-title-dependency" class="toc-link depth-2">Stable-title dependency</a><a href="#ui-automation-dependency" class="toc-link depth-2">UI Automation dependency</a><a href="#multiple-panes" class="toc-link depth-2">Multiple panes</a></nav></div></aside>
+<article class="content" id="content">
+<section class="event-section reveal"><div class="eyebrow">Live event model</div><h2 style="margin-top:8px">What can trigger a notification?</h2><p>These are the four events currently wired into the Windows notification layer.</p><div class="event-grid"><article class="event-card" data-event="permission_prompt">
+      <div class="event-top"><span class="event-code">permission_prompt</span><span class="status-dot"></span></div>
+      <h3>Permission</h3>
+      <p>Copilot needs approval to execute a tool.</p>
+      <div class="toast-preview"><div class="toast-app">Windows notification</div><strong>Copilot needs approval</strong><span>Copilot is waiting for your permission.</span></div>
+    </article><article class="event-card" data-event="agent_completed">
+      <div class="event-top"><span class="event-code">agent_completed</span><span class="status-dot"></span></div>
+      <h3>Subagent complete</h3>
+      <p>A background Copilot agent or subagent has finished.</p>
+      <div class="toast-preview"><div class="toast-app">Windows notification</div><strong>Copilot subagent finished</strong><span>A background Copilot agent has completed its work.</span></div>
+    </article><article class="event-card" data-event="elicitation_dialog">
+      <div class="event-top"><span class="event-code">elicitation_dialog</span><span class="status-dot"></span></div>
+      <h3>Input required</h3>
+      <p>Copilot is waiting for additional information.</p>
+      <div class="toast-preview"><div class="toast-app">Windows notification</div><strong>Copilot needs your input</strong><span>Copilot is waiting for additional information.</span></div>
+    </article><article class="event-card" data-event="agentStop">
+      <div class="event-top"><span class="event-code">agentStop</span><span class="status-dot"></span></div>
+      <h3>Main agent finished</h3>
+      <p>The main Copilot agent has finished a turn.</p>
+      <div class="toast-preview"><div class="toast-app">Windows notification</div><strong>Copilot finished</strong><span>Copilot has finished its task.</span></div>
+    </article></div></section>
+
+<div class="interactive-panel reveal"><div class="panel-head"><div><div class="panel-title">Attention decision</div><div style="color:var(--muted);font-size:13px">Same event, different user context.</div></div></div><div class="tabbar"><button class="tab-btn active" data-tab="visible" type="button">Copilot visible</button><button class="tab-btn" data-tab="othertab" type="button">Other Terminal tab</button><button class="tab-btn" data-tab="otherapp" type="button">Other application</button></div><div class="tab-panel active" id="tab-visible"><div class="toast-preview"><div class="toast-app">Decision</div><strong>No notification</strong><span>The exact Copilot tab is selected, so the event is not surfaced as a Windows toast.</span></div></div><div class="tab-panel" id="tab-othertab"><div class="toast-preview"><div class="toast-app">Decision</div><strong>Show notification</strong><span>Windows Terminal is foreground, but another tab is selected. Copilot is effectively in the background.</span></div></div><div class="tab-panel" id="tab-otherapp"><div class="toast-preview"><div class="toast-app">Decision</div><strong>Show notification</strong><span>Another application owns the foreground window, so the Copilot session is not visible.</span></div></div></div>
+
+
+<h2 class="reveal" id="1-purpose">1. Purpose</h2>
+<p class="reveal">This document records the Windows notification system built around GitHub Copilot CLI.</p>
+<p class="reveal">The goal was not simply to make Copilot produce notifications. Copilot CLI already exposes notification hooks. The goal was to build a <strong>Windows desktop notification layer that is context-aware</strong>:</p>
+<ul class="reveal">
+<li>Notify when Copilot needs permission.</li>
+<li>Notify when Copilot needs user input.</li>
+<li>Notify when a background Copilot agent/subagent finishes.</li>
+<li>Notify when the main Copilot agent finishes a turn.</li>
+<li><strong>Do not show a Windows toast when the user is already looking at that exact Copilot CLI tab.</strong></li>
+<li>Show the toast when Copilot is running in another Windows Terminal tab.</li>
+<li>Show the toast when the user has moved to another application such as Brave/Chrome/VS Code.</li>
+</ul>
+<p class="reveal">The resulting system uses native Copilot CLI hooks for event detection and custom PowerShell + Windows APIs + UI Automation + BurntToast for the Windows-side behavior.</p>
+<hr/>
+<h2 class="reveal" id="2-what-is-native-copilot-cli-functionality-vs-what-we-built">2. What is native Copilot CLI functionality vs. what we built</h2>
+<h3 class="reveal" id="native-copilot-cli">Native Copilot CLI</h3>
+<p class="reveal">Copilot CLI provides a <code>notification</code> hook. The current hook reference documents notification types including:</p>
+<ul class="reveal">
+<li><code>shell_completed</code></li>
+<li><code>shell_detached_completed</code></li>
+<li><code>agent_completed</code></li>
+<li><code>agent_idle</code></li>
+<li><code>permission_prompt</code></li>
+<li><code>elicitation_dialog</code></li>
+</ul>
+<p class="reveal">The CLI also exposes <code>agentStop</code>, which fires when the main agent finishes a turn.</p>
+<p class="reveal">The <code>notification</code> hook is asynchronous/fire-and-forget and supports a <code>matcher</code> against <code>notification_type</code>.</p>
+<h3 class="reveal" id="custom-functionality-built-here">Custom functionality built here</h3>
+<p class="reveal">Copilot CLI does <strong>not</strong> provide the exact desktop behavior we wanted:</p>
+<blockquote class="reveal">
+<p class="reveal">Only show a Windows toast when the Copilot session is not currently visible to the user.</p>
+</blockquote>
+<p class="reveal">The custom layer therefore handles:</p>
+<ol class="reveal">
+<li>Windows toast rendering through BurntToast.</li>
+<li>Foreground-window detection through Win32.</li>
+<li>Windows Terminal tab discovery through UI Automation.</li>
+<li>Detection of the exact selected Terminal tab.</li>
+<li>A stable Copilot tab identity based on <code>WT_SESSION</code>.</li>
+<li>Suppression of the toast when that Copilot tab is selected.</li>
+</ol>
+<p class="reveal">Conceptually:</p>
+<button class="copy-btn" data-copy="                Copilot CLI
+                    |
+                    | native hook event
+                    v
+          notification-hooks.json
+                    |
+                    v
+          copilot-notify.ps1
+                    |
+          +---------+---------+
+          |                   |
+          v                   v
+   Foreground check      Tab-selection check
+          |                   |
+          +---------+---------+
+                    |
+          +---------+---------+
+          |                   |
+    Copilot tab visible   Copilot in background
+          |                   |
+       no toast              toast
+" type="button">Copy</button><pre class="reveal"><code class="language-text">                Copilot CLI
+                    |
+                    | native hook event
+                    v
+          notification-hooks.json
+                    |
+                    v
+          copilot-notify.ps1
+                    |
+          +---------+---------+
+          |                   |
+          v                   v
+   Foreground check      Tab-selection check
+          |                   |
+          +---------+---------+
+                    |
+          +---------+---------+
+          |                   |
+    Copilot tab visible   Copilot in background
+          |                   |
+       no toast              toast
+</code></pre>
+<hr/>
+<h1>3. Final architecture</h1>
+<button class="copy-btn" data-copy='GitHub Copilot CLI
+        |
+        | notification / agentStop
+        v
+~/.copilot/hooks/notification-hooks.json
+        |
+        | invokes PowerShell
+        v
+~/.copilot/hooks/copilot-notify.ps1
+        |
+        +--&gt; Is foreground app Windows Terminal?
+        |
+        +--&gt; If yes, inspect Windows Terminal UI Automation
+        |
+        +--&gt; Find "Copilot [SESSION]"
+        |
+        +--&gt; Is that tab selected?
+        |        |
+        |        +--&gt; Yes: EXIT, no toast
+        |        |
+        |        +--&gt; No: show toast
+        |
+        +--&gt; If foreground app is not Windows Terminal:
+                 show toast
+                        |
+                        v
+                  BurntToast
+                        |
+                        v
+                Windows notification
+' type="button">Copy</button><pre class="reveal"><code class="language-text">GitHub Copilot CLI
+        |
+        | notification / agentStop
+        v
+~/.copilot/hooks/notification-hooks.json
+        |
+        | invokes PowerShell
+        v
+~/.copilot/hooks/copilot-notify.ps1
+        |
+        +--&gt; Is foreground app Windows Terminal?
+        |
+        +--&gt; If yes, inspect Windows Terminal UI Automation
+        |
+        +--&gt; Find "Copilot [SESSION]"
+        |
+        +--&gt; Is that tab selected?
+        |        |
+        |        +--&gt; Yes: EXIT, no toast
+        |        |
+        |        +--&gt; No: show toast
+        |
+        +--&gt; If foreground app is not Windows Terminal:
+                 show toast
+                        |
+                        v
+                  BurntToast
+                        |
+                        v
+                Windows notification
+</code></pre>
+<hr/>
+<h1>4. Files created</h1>
+<p class="reveal">The system uses these files:</p>
+<button class="copy-btn" data-copy="%USERPROFILE%\.copilot\
+└── hooks\
+    ├── notification-hooks.json
+    └── copilot-notify.ps1
+" type="button">Copy</button><pre class="reveal"><code class="language-text">%USERPROFILE%\.copilot\
+└── hooks\
+    ├── notification-hooks.json
+    └── copilot-notify.ps1
+</code></pre>
+<p class="reveal">A PowerShell profile wrapper was also added so <code>copilot</code> can create a stable terminal-tab title:</p>
+<button class="copy-btn" data-copy="$PROFILE
+" type="button">Copy</button><pre class="reveal"><code class="language-text">$PROFILE
+</code></pre>
+<p class="reveal">The BurntToast module is installed as a PowerShell module.</p>
+<hr/>
+<h1>5. Notification events currently configured</h1>
+<p class="reveal">The current configuration sends notifications for four events.</p>
+<table class="reveal">
+<thead>
+<tr>
+<th>Event</th>
+<th>Meaning</th>
+<th>Current toast</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>permission_prompt</code></td>
+<td>Copilot needs approval to execute something</td>
+<td><strong>Copilot needs approval</strong></td>
+</tr>
+<tr>
+<td><code>agent_completed</code></td>
+<td>A background/subagent finishes</td>
+<td><strong>Copilot subagent finished</strong></td>
+</tr>
+<tr>
+<td><code>elicitation_dialog</code></td>
+<td>Copilot needs additional user information</td>
+<td><strong>Copilot needs your input</strong></td>
+</tr>
+<tr>
+<td><code>agentStop</code></td>
+<td>Main Copilot agent finishes a turn</td>
+<td><strong>Copilot finished</strong></td>
+</tr>
+</tbody>
+</table>
+<p class="reveal">The current notification text is:</p>
+<h3 class="reveal" id="permission-prompt"><code>permission_prompt</code></h3>
+<button class="copy-btn" data-copy="Title:   Copilot needs approval
+Message: Copilot is waiting for your permission.
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Title:   Copilot needs approval
+Message: Copilot is waiting for your permission.
+</code></pre>
+<h3 class="reveal" id="agent-completed"><code>agent_completed</code></h3>
+<button class="copy-btn" data-copy="Title:   Copilot subagent finished
+Message: A background Copilot agent has completed its work.
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Title:   Copilot subagent finished
+Message: A background Copilot agent has completed its work.
+</code></pre>
+<h3 class="reveal" id="elicitation-dialog"><code>elicitation_dialog</code></h3>
+<button class="copy-btn" data-copy="Title:   Copilot needs your input
+Message: Copilot is waiting for additional information.
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Title:   Copilot needs your input
+Message: Copilot is waiting for additional information.
+</code></pre>
+<h3 class="reveal" id="agentstop"><code>agentStop</code></h3>
+<button class="copy-btn" data-copy="Title:   Copilot finished
+Message: Copilot has finished its task.
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Title:   Copilot finished
+Message: Copilot has finished its task.
+</code></pre>
+<p class="reveal">The following notification types are <strong>not currently configured</strong>:</p>
+<button class="copy-btn" data-copy="shell_completed
+shell_detached_completed
+agent_idle
+" type="button">Copy</button><pre class="reveal"><code class="language-text">shell_completed
+shell_detached_completed
+agent_idle
+</code></pre>
+<p class="reveal">They can be added later without changing the foreground/background mechanism.</p>
+<hr/>
+<h1>6. <code>notification-hooks.json</code></h1>
+<p class="reveal">The current configuration is:</p>
+<button class="copy-btn" data-copy="{
+  &quot;version&quot;: 1,
+  &quot;hooks&quot;: {
+    &quot;notification&quot;: [
+      {
+        &quot;type&quot;: &quot;command&quot;,
+        &quot;matcher&quot;: &quot;permission_prompt&quot;,
+        &quot;powershell&quot;: &quot;&amp; \&quot;$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\&quot; -Title 'Copilot needs approval' -Message 'Copilot is waiting for your permission.'&quot;,
+        &quot;timeoutSec&quot;: 5
+      },
+      {
+        &quot;type&quot;: &quot;command&quot;,
+        &quot;matcher&quot;: &quot;agent_completed&quot;,
+        &quot;powershell&quot;: &quot;&amp; \&quot;$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\&quot; -Title 'Copilot subagent finished' -Message 'A background Copilot agent has completed its work.'&quot;,
+        &quot;timeoutSec&quot;: 5
+      },
+      {
+        &quot;type&quot;: &quot;command&quot;,
+        &quot;matcher&quot;: &quot;elicitation_dialog&quot;,
+        &quot;powershell&quot;: &quot;&amp; \&quot;$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\&quot; -Title 'Copilot needs your input' -Message 'Copilot is waiting for additional information.'&quot;,
+        &quot;timeoutSec&quot;: 5
+      }
+    ],
+    &quot;agentStop&quot;: [
+      {
+        &quot;type&quot;: &quot;command&quot;,
+        &quot;powershell&quot;: &quot;&amp; \&quot;$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\&quot; -Title 'Copilot finished' -Message 'Copilot has finished its task.'&quot;,
+        &quot;timeoutSec&quot;: 5
+      }
+    ]
+  }
+}
+" type="button">Copy</button><pre class="reveal"><code class="language-json">{
+  "version": 1,
+  "hooks": {
+    "notification": [
+      {
+        "type": "command",
+        "matcher": "permission_prompt",
+        "powershell": "&amp; \"$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\" -Title 'Copilot needs approval' -Message 'Copilot is waiting for your permission.'",
+        "timeoutSec": 5
+      },
+      {
+        "type": "command",
+        "matcher": "agent_completed",
+        "powershell": "&amp; \"$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\" -Title 'Copilot subagent finished' -Message 'A background Copilot agent has completed its work.'",
+        "timeoutSec": 5
+      },
+      {
+        "type": "command",
+        "matcher": "elicitation_dialog",
+        "powershell": "&amp; \"$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\" -Title 'Copilot needs your input' -Message 'Copilot is waiting for additional information.'",
+        "timeoutSec": 5
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "powershell": "&amp; \"$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\" -Title 'Copilot finished' -Message 'Copilot has finished its task.'",
+        "timeoutSec": 5
+      }
+    ]
+  }
+}
+</code></pre>
+<p class="reveal">This file is responsible only for <strong>which Copilot events invoke the notification script</strong>.</p>
+<p class="reveal">It does not decide whether the toast should be displayed.</p>
+<p class="reveal">That decision is made by <code>copilot-notify.ps1</code>.</p>
+<hr/>
+<h1>7. <code>copilot-notify.ps1</code></h1>
+<p class="reveal">The current script is:</p>
+<button class="copy-btn" data-copy="param(
+    [Parameter(Mandatory=$true)]
+    [string]$Title,
+
+    [Parameter(Mandatory=$true)]
+    [string]$Message
+)
+
+# ------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------
+
+$copilotTabPrefix = &quot;Copilot [&quot;
+
+# ------------------------------------------------------------
+# Win32 APIs
+# ------------------------------------------------------------
+
+Add-Type @&quot;
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+
+public class Win32 {
+    [DllImport(&quot;user32.dll&quot;)]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport(&quot;user32.dll&quot;)]
+    public static extern uint GetWindowThreadProcessId(
+        IntPtr hWnd,
+        out uint processId
+    );
+}
+&quot;@
+
+# ------------------------------------------------------------
+# Get foreground window
+# ------------------------------------------------------------
+
+$foregroundHwnd = [Win32]::GetForegroundWindow()
+
+if ($foregroundHwnd -eq [IntPtr]::Zero) {
+    # Detection failed -&gt; fail open and show notification.
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $Title, $Message
+    exit 0
+}
+
+$foregroundPid = 0
+
+[Win32]::GetWindowThreadProcessId(
+    $foregroundHwnd,
+    [ref]$foregroundPid
+) | Out-Null
+
+$foregroundProcess = Get-Process `
+    -Id $foregroundPid `
+    -ErrorAction SilentlyContinue
+
+# ------------------------------------------------------------
+# Is the foreground application Windows Terminal?
+# ------------------------------------------------------------
+
+if (
+    -not $foregroundProcess -or
+    $foregroundProcess.ProcessName -ne &quot;WindowsTerminal&quot;
+) {
+    # Chrome, Edge, VS Code, etc. is foreground.
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $Title, $Message
+    exit 0
+}
+
+# ------------------------------------------------------------
+# Determine this Copilot session's expected tab name.
+#
+# The Copilot launcher sets:
+#
+#   Copilot [XXXXXXXX]
+#
+# using WT_SESSION.
+# ------------------------------------------------------------
+
+$session = $env:WT_SESSION
+
+if (-not $session) {
+    # Not running inside Windows Terminal.
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $Title, $Message
+    exit 0
+}
+
+$cleanSession = $session.Replace(&quot;-&quot;, &quot;&quot;)
+
+if ($cleanSession.Length -lt 8) {
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $Title, $Message
+    exit 0
+}
+
+$shortSession = $cleanSession.Substring(0, 8)
+
+$expectedTabName = &quot;Copilot [$shortSession]&quot;
+
+# ------------------------------------------------------------
+# Windows UI Automation
+# ------------------------------------------------------------
+
+try {
+    Add-Type -AssemblyName UIAutomationClient
+    Add-Type -AssemblyName UIAutomationTypes
+
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+
+    # Find Windows Terminal windows.
+    $terminalCondition =
+        New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::ClassNameProperty,
+            &quot;CASCADIA_HOSTING_WINDOW_CLASS&quot;
+        )
+
+    $terminals = $root.FindAll(
+        [System.Windows.Automation.TreeScope]::Children,
+        $terminalCondition
+    )
+
+    $copilotTabIsSelected = $false
+
+    foreach ($terminal in $terminals) {
+
+        # Only inspect the foreground Terminal window.
+        if (
+            $terminal.Current.NativeWindowHandle -ne
+            $foregroundHwnd.ToInt32()
+        ) {
+            continue
+        }
+
+        $tabCondition =
+            New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::TabItem
+            )
+
+        $tabs = $terminal.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            $tabCondition
+        )
+
+        foreach ($tab in $tabs) {
+
+            $tabName = $tab.Current.Name
+
+            if ($tabName -ne $expectedTabName) {
+                continue
+            }
+
+            try {
+                $selectionPattern = $tab.GetCurrentPattern(
+                    [System.Windows.Automation.SelectionItemPattern]::Pattern
+                )
+
+                if ($selectionPattern.Current.IsSelected) {
+                    $copilotTabIsSelected = $true
+                }
+            }
+            catch {
+                # Continue; fail open below.
+            }
+        }
+    }
+
+    # --------------------------------------------------------
+    # Copilot tab is currently visible.
+    # Do NOT show notification.
+    # --------------------------------------------------------
+
+    if ($copilotTabIsSelected) {
+        exit 0
+    }
+}
+catch {
+    # UI Automation failed.
+    # Fail open so notifications are not silently lost.
+}
+
+# ------------------------------------------------------------
+# Copilot is in the background.
+# Show notification.
+# ------------------------------------------------------------
+
+Import-Module BurntToast
+
+New-BurntToastNotification -Text $Title, $Message
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">param(
+    [Parameter(Mandatory=$true)]
+    [string]$Title,
+
+    [Parameter(Mandatory=$true)]
+    [string]$Message
+)
+
+# ------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------
+
+$copilotTabPrefix = "Copilot ["
+
+# ------------------------------------------------------------
+# Win32 APIs
+# ------------------------------------------------------------
+
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+
+public class Win32 {
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(
+        IntPtr hWnd,
+        out uint processId
+    );
+}
+"@
+
+# ------------------------------------------------------------
+# Get foreground window
+# ------------------------------------------------------------
+
+$foregroundHwnd = [Win32]::GetForegroundWindow()
+
+if ($foregroundHwnd -eq [IntPtr]::Zero) {
+    # Detection failed -&gt; fail open and show notification.
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $Title, $Message
+    exit 0
+}
+
+$foregroundPid = 0
+
+[Win32]::GetWindowThreadProcessId(
+    $foregroundHwnd,
+    [ref]$foregroundPid
+) | Out-Null
+
+$foregroundProcess = Get-Process `
+    -Id $foregroundPid `
+    -ErrorAction SilentlyContinue
+
+# ------------------------------------------------------------
+# Is the foreground application Windows Terminal?
+# ------------------------------------------------------------
+
+if (
+    -not $foregroundProcess -or
+    $foregroundProcess.ProcessName -ne "WindowsTerminal"
+) {
+    # Chrome, Edge, VS Code, etc. is foreground.
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $Title, $Message
+    exit 0
+}
+
+# ------------------------------------------------------------
+# Determine this Copilot session's expected tab name.
+#
+# The Copilot launcher sets:
+#
+#   Copilot [XXXXXXXX]
+#
+# using WT_SESSION.
+# ------------------------------------------------------------
+
+$session = $env:WT_SESSION
+
+if (-not $session) {
+    # Not running inside Windows Terminal.
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $Title, $Message
+    exit 0
+}
+
+$cleanSession = $session.Replace("-", "")
+
+if ($cleanSession.Length -lt 8) {
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $Title, $Message
+    exit 0
+}
+
+$shortSession = $cleanSession.Substring(0, 8)
+
+$expectedTabName = "Copilot [$shortSession]"
+
+# ------------------------------------------------------------
+# Windows UI Automation
+# ------------------------------------------------------------
+
+try {
+    Add-Type -AssemblyName UIAutomationClient
+    Add-Type -AssemblyName UIAutomationTypes
+
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+
+    # Find Windows Terminal windows.
+    $terminalCondition =
+        New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::ClassNameProperty,
+            "CASCADIA_HOSTING_WINDOW_CLASS"
+        )
+
+    $terminals = $root.FindAll(
+        [System.Windows.Automation.TreeScope]::Children,
+        $terminalCondition
+    )
+
+    $copilotTabIsSelected = $false
+
+    foreach ($terminal in $terminals) {
+
+        # Only inspect the foreground Terminal window.
+        if (
+            $terminal.Current.NativeWindowHandle -ne
+            $foregroundHwnd.ToInt32()
+        ) {
+            continue
+        }
+
+        $tabCondition =
+            New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::TabItem
+            )
+
+        $tabs = $terminal.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            $tabCondition
+        )
+
+        foreach ($tab in $tabs) {
+
+            $tabName = $tab.Current.Name
+
+            if ($tabName -ne $expectedTabName) {
+                continue
+            }
+
+            try {
+                $selectionPattern = $tab.GetCurrentPattern(
+                    [System.Windows.Automation.SelectionItemPattern]::Pattern
+                )
+
+                if ($selectionPattern.Current.IsSelected) {
+                    $copilotTabIsSelected = $true
+                }
+            }
+            catch {
+                # Continue; fail open below.
+            }
+        }
+    }
+
+    # --------------------------------------------------------
+    # Copilot tab is currently visible.
+    # Do NOT show notification.
+    # --------------------------------------------------------
+
+    if ($copilotTabIsSelected) {
+        exit 0
+    }
+}
+catch {
+    # UI Automation failed.
+    # Fail open so notifications are not silently lost.
+}
+
+# ------------------------------------------------------------
+# Copilot is in the background.
+# Show notification.
+# ------------------------------------------------------------
+
+Import-Module BurntToast
+
+New-BurntToastNotification -Text $Title, $Message
+</code></pre>
+<hr/>
+<h1>8. Why the first approach failed</h1>
+<p class="reveal">The original approach compared the current PowerShell/console title with the Windows Terminal window title.</p>
+<p class="reveal">That was unreliable because Windows Terminal has separate concepts for:</p>
+<ul class="reveal">
+<li>the shell/profile,</li>
+<li>the tab title,</li>
+<li>the application/window title,</li>
+<li>and the currently selected tab.</li>
+</ul>
+<p class="reveal">Windows Terminal documents that tab titles may be controlled by the shell/application and that panes/tabs can have their own titles.</p>
+<p class="reveal">The failed approach effectively answered:</p>
+<button class="copy-btn" data-copy='"Does this title equal that title?"
+' type="button">Copy</button><pre class="reveal"><code class="language-text">"Does this title equal that title?"
+</code></pre>
+<p class="reveal">It did not answer:</p>
+<button class="copy-btn" data-copy='"Is the exact Terminal tab containing this Copilot session currently selected?"
+' type="button">Copy</button><pre class="reveal"><code class="language-text">"Is the exact Terminal tab containing this Copilot session currently selected?"
+</code></pre>
+<p class="reveal">This is why a toast appeared even though the Copilot tab was visible.</p>
+<hr/>
+<h1>9. The final tab-identification mechanism</h1>
+<p class="reveal">The solution uses <code>WT_SESSION</code>.</p>
+<p class="reveal">Every Windows Terminal session exposes:</p>
+<button class="copy-btn" data-copy="$env:WT_SESSION
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">$env:WT_SESSION
+</code></pre>
+<p class="reveal">The PowerShell wrapper takes the first eight hexadecimal characters and changes the tab title to:</p>
+<button class="copy-btn" data-copy="Copilot [XXXXXXXX]
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Copilot [XXXXXXXX]
+</code></pre>
+<p class="reveal">Example:</p>
+<button class="copy-btn" data-copy="Copilot [3f5f2596]
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Copilot [3f5f2596]
+</code></pre>
+<p class="reveal">The notification script runs inside that same session and reads:</p>
+<button class="copy-btn" data-copy="$env:WT_SESSION
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">$env:WT_SESSION
+</code></pre>
+<p class="reveal">It reconstructs:</p>
+<button class="copy-btn" data-copy="Copilot [3f5f2596]
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Copilot [3f5f2596]
+</code></pre>
+<p class="reveal">It then asks Windows UI Automation for the <code>TabItem</code>s exposed by Windows Terminal and checks <code>SelectionItemPattern.IsSelected</code>.</p>
+<p class="reveal">The important mapping is therefore:</p>
+<button class="copy-btn" data-copy="Copilot process
+      |
+      +--&gt; WT_SESSION = 3f5f2596
+                     |
+                     v
+              Copilot [3f5f2596]
+                     |
+                     v
+             Windows Terminal
+               TabItem.Name
+                     |
+                     v
+             IsSelected = True?
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Copilot process
+      |
+      +--&gt; WT_SESSION = 3f5f2596
+                     |
+                     v
+              Copilot [3f5f2596]
+                     |
+                     v
+             Windows Terminal
+               TabItem.Name
+                     |
+                     v
+             IsSelected = True?
+</code></pre>
+<hr/>
+<h1>10. Foreground-window detection</h1>
+<p class="reveal">The script first determines which application owns the Windows foreground window.</p>
+<p class="reveal">It uses:</p>
+<button class="copy-btn" data-copy="GetForegroundWindow()
+" type="button">Copy</button><pre class="reveal"><code class="language-text">GetForegroundWindow()
+</code></pre>
+<p class="reveal">to get the handle of the window currently receiving user interaction.</p>
+<p class="reveal">It then uses:</p>
+<button class="copy-btn" data-copy="GetWindowThreadProcessId()
+" type="button">Copy</button><pre class="reveal"><code class="language-text">GetWindowThreadProcessId()
+</code></pre>
+<p class="reveal">to identify the owning process.</p>
+<p class="reveal">The result is used to distinguish:</p>
+<button class="copy-btn" data-copy="Windows Terminal is foreground
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Windows Terminal is foreground
+</code></pre>
+<p class="reveal">from:</p>
+<button class="copy-btn" data-copy="Brave/Chrome/VS Code/etc. is foreground
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Brave/Chrome/VS Code/etc. is foreground
+</code></pre>
+<p class="reveal">If a non-Terminal application is foreground, the script immediately displays the toast.</p>
+<p class="reveal">This is more precise than simply checking whether a <code>WindowsTerminal.exe</code> process exists.</p>
+<hr/>
+<h1>11. Windows UI Automation</h1>
+<p class="reveal">Windows UI Automation exposes Terminal tabs as <code>TabItem</code> controls.</p>
+<p class="reveal">The relevant properties/patterns are:</p>
+<button class="copy-btn" data-copy="ControlType = TabItem
+SelectionItemPattern.IsSelected
+" type="button">Copy</button><pre class="reveal"><code class="language-text">ControlType = TabItem
+SelectionItemPattern.IsSelected
+</code></pre>
+<p class="reveal">The diagnostic performed during development produced:</p>
+<button class="copy-btn" data-copy="TAB: [Copilot [3f5f2596]] Selected=False
+TAB: [Windows PowerShell] Selected=False
+TAB: [Windows PowerShell] Selected=True
+" type="button">Copy</button><pre class="reveal"><code class="language-text">TAB: [Copilot [3f5f2596]] Selected=False
+TAB: [Windows PowerShell] Selected=False
+TAB: [Windows PowerShell] Selected=True
+</code></pre>
+<p class="reveal">This proved that the machine exposes the selected Windows Terminal tab through UI Automation.</p>
+<p class="reveal">Microsoft's UI Automation model requires tab items to support the selection-item pattern, making <code>IsSelected</code> the appropriate mechanism for determining the currently selected tab.</p>
+<hr/>
+<h1>12. PowerShell <code>copilot</code> wrapper</h1>
+<p class="reveal">The PowerShell profile contains a wrapper named <code>copilot</code>.</p>
+<p class="reveal">Conceptually:</p>
+<button class="copy-btn" data-copy='function copilot {
+    $session = $env:WT_SESSION
+
+    if (-not $session) {
+        ...
+    }
+
+    $shortSession = $session.Replace("-", "").Substring(0, 8)
+
+    $oldTitle = $Host.UI.RawUI.WindowTitle
+
+    try {
+        $Host.UI.RawUI.WindowTitle = "Copilot [$shortSession]"
+
+        $realCopilot = Get-Command copilot -CommandType Application |
+            Select-Object -First 1
+
+        &amp; $realCopilot.Source @args
+    }
+    finally {
+        $Host.UI.RawUI.WindowTitle = $oldTitle
+    }
+}
+' type="button">Copy</button><pre class="reveal"><code class="language-powershell">function copilot {
+    $session = $env:WT_SESSION
+
+    if (-not $session) {
+        ...
+    }
+
+    $shortSession = $session.Replace("-", "").Substring(0, 8)
+
+    $oldTitle = $Host.UI.RawUI.WindowTitle
+
+    try {
+        $Host.UI.RawUI.WindowTitle = "Copilot [$shortSession]"
+
+        $realCopilot = Get-Command copilot -CommandType Application |
+            Select-Object -First 1
+
+        &amp; $realCopilot.Source @args
+    }
+    finally {
+        $Host.UI.RawUI.WindowTitle = $oldTitle
+    }
+}
+</code></pre>
+<p class="reveal">This lets the normal workflow remain:</p>
+<button class="copy-btn" data-copy="copilot
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">copilot
+</code></pre>
+<p class="reveal">instead of requiring a special launcher command.</p>
+<p class="reveal">The function itself is only responsible for giving the session a stable Terminal-tab identity. It does not generate notifications.</p>
+<hr/>
+<h1>13. Copilot terminal-title setting</h1>
+<p class="reveal">Copilot CLI normally supports:</p>
+<button class="copy-btn" data-copy='"updateTerminalTitle": true
+' type="button">Copy</button><pre class="reveal"><code class="language-json">"updateTerminalTitle": true
+</code></pre>
+<p class="reveal">which updates the terminal title with the current intent.</p>
+<p class="reveal">For this notification system that behavior is disabled:</p>
+<button class="copy-btn" data-copy='"updateTerminalTitle": false
+' type="button">Copy</button><pre class="reveal"><code class="language-json">"updateTerminalTitle": false
+</code></pre>
+<p class="reveal">The reason is important.</p>
+<p class="reveal">We need the tab title to remain a stable identifier:</p>
+<button class="copy-btn" data-copy="Copilot [3f5f2596]
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Copilot [3f5f2596]
+</code></pre>
+<p class="reveal">instead of changing to:</p>
+<button class="copy-btn" data-copy="Create Notification Test File
+Analyze Repository
+Implement Authentication
+...
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Create Notification Test File
+Analyze Repository
+Implement Authentication
+...
+</code></pre>
+<p class="reveal">If the title changed continually, the notification script would no longer have a stable UI Automation identifier.</p>
+<hr/>
+<h1>14. BurntToast</h1>
+<p class="reveal">BurntToast is the Windows PowerShell module used to render the actual desktop toast.</p>
+<p class="reveal">The final rendering call is:</p>
+<button class="copy-btn" data-copy="Import-Module BurntToast
+
+New-BurntToastNotification `
+    -Text $Title, $Message
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">Import-Module BurntToast
+
+New-BurntToastNotification `
+    -Text $Title, $Message
+</code></pre>
+<p class="reveal">BurntToast was tested independently before integrating it into the hook.</p>
+<p class="reveal">A successful test produced a Windows notification in the lower-right corner.</p>
+<hr/>
+<h1>15. Current behavior matrix</h1>
+<table class="reveal">
+<thead>
+<tr>
+<th>User state when event occurs</th>
+<th>Notification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Copilot tab is selected and visible</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Another Windows Terminal tab is selected</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Another Windows Terminal window is selected</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Brave/Chrome is foreground</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>VS Code is foreground</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>UI Automation cannot determine the tab</td>
+<td>Yes (fail-open)</td>
+</tr>
+<tr>
+<td><code>WT_SESSION</code> unavailable</td>
+<td>Yes (fail-open)</td>
+</tr>
+<tr>
+<td>Foreground-window detection fails</td>
+<td>Yes (fail-open)</td>
+</tr>
+</tbody>
+</table>
+<p class="reveal">The fail-open strategy was intentional.</p>
+<p class="reveal">A detection failure should not silently prevent an important Copilot notification.</p>
+<hr/>
+<h1>16. Verified scenarios</h1>
+<p class="reveal">The system was manually tested in three scenarios.</p>
+<h3 class="reveal" id="scenario-a-copilot-tab-remains-visible">Scenario A — Copilot tab remains visible</h3>
+<p class="reveal">A task was submitted to Copilot and the user stayed on the same Copilot tab.</p>
+<p class="reveal">Result:</p>
+<button class="copy-btn" data-copy="No toast
+" type="button">Copy</button><pre class="reveal"><code class="language-text">No toast
+</code></pre>
+<h3 class="reveal" id="scenario-b-another-windows-terminal-tab-becomes-active">Scenario B — Another Windows Terminal tab becomes active</h3>
+<p class="reveal">A Copilot task was started and the user switched to another Terminal tab.</p>
+<p class="reveal">Result:</p>
+<button class="copy-btn" data-copy="Toast displayed
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Toast displayed
+</code></pre>
+<h3 class="reveal" id="scenario-c-another-application-becomes-active">Scenario C — Another application becomes active</h3>
+<p class="reveal">A Copilot task was started and the user switched to Brave.</p>
+<p class="reveal">Result:</p>
+<button class="copy-btn" data-copy="Toast displayed
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Toast displayed
+</code></pre>
+<p class="reveal">These three tests confirm that the key foreground/background behavior is working.</p>
+<hr/>
+<h1>17. Installation/setup summary</h1>
+<h2 class="reveal" id="burnttoast">BurntToast</h2>
+<p class="reveal">Install:</p>
+<button class="copy-btn" data-copy="Install-Module BurntToast -Scope CurrentUser
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">Install-Module BurntToast -Scope CurrentUser
+</code></pre>
+<p class="reveal">Because Windows PowerShell execution policy initially blocked the module, the current setup uses:</p>
+<button class="copy-btn" data-copy="Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+</code></pre>
+<p class="reveal">Verify:</p>
+<button class="copy-btn" data-copy='Import-Module BurntToast
+
+New-BurntToastNotification `
+    -Text "Copilot Test", "Toast notifications are working!"
+' type="button">Copy</button><pre class="reveal"><code class="language-powershell">Import-Module BurntToast
+
+New-BurntToastNotification `
+    -Text "Copilot Test", "Toast notifications are working!"
+</code></pre>
+<hr/>
+<h2 class="reveal" id="hook-directory">Hook directory</h2>
+<button class="copy-btn" data-copy='New-Item `
+    -ItemType Directory `
+    -Path "$HOME\.copilot\hooks" `
+    -Force
+' type="button">Copy</button><pre class="reveal"><code class="language-powershell">New-Item `
+    -ItemType Directory `
+    -Path "$HOME\.copilot\hooks" `
+    -Force
+</code></pre>
+<p class="reveal">Files:</p>
+<button class="copy-btn" data-copy="$HOME\.copilot\hooks\notification-hooks.json
+$HOME\.copilot\hooks\copilot-notify.ps1
+" type="button">Copy</button><pre class="reveal"><code class="language-text">$HOME\.copilot\hooks\notification-hooks.json
+$HOME\.copilot\hooks\copilot-notify.ps1
+</code></pre>
+<p class="reveal">If <code>COPILOT_HOME</code> is set, Copilot uses that location instead.</p>
+<hr/>
+<h1>18. Restart behavior</h1>
+<p class="reveal">Changes to the hook configuration are loaded when Copilot CLI starts.</p>
+<p class="reveal">Therefore:</p>
+<button class="copy-btn" data-copy="notification-hooks.json changed
+        |
+        v
+restart Copilot CLI
+" type="button">Copy</button><pre class="reveal"><code class="language-text">notification-hooks.json changed
+        |
+        v
+restart Copilot CLI
+</code></pre>
+<p class="reveal">Changes to the PowerShell notification script itself are read when the hook fires, so modifying the <code>.ps1</code> generally does not require a separate hook-config reload.</p>
+<p class="reveal">For predictable testing, restarting Copilot after configuration changes is recommended.</p>
+<hr/>
+<h1>19. Troubleshooting</h1>
+<h2 class="reveal" id="toast-appears-while-copilot-tab-is-visible">Toast appears while Copilot tab is visible</h2>
+<p class="reveal">Check:</p>
+<button class="copy-btn" data-copy="$env:WT_SESSION
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">$env:WT_SESSION
+</code></pre>
+<p class="reveal">Then check the Terminal tab title.</p>
+<p class="reveal">It should follow:</p>
+<button class="copy-btn" data-copy="Copilot [XXXXXXXX]
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Copilot [XXXXXXXX]
+</code></pre>
+<p class="reveal">Next run the UI Automation diagnostic and confirm:</p>
+<button class="copy-btn" data-copy="TAB: [Copilot [XXXXXXXX]] Selected=True
+" type="button">Copy</button><pre class="reveal"><code class="language-text">TAB: [Copilot [XXXXXXXX]] Selected=True
+</code></pre>
+<p class="reveal">If the name differs, the wrapper and notification script are no longer using the same identity.</p>
+<hr/>
+<h2 class="reveal" id="toast-never-appears">Toast never appears</h2>
+<p class="reveal">Verify BurntToast:</p>
+<button class="copy-btn" data-copy='Import-Module BurntToast
+
+New-BurntToastNotification `
+    -Text "Test", "Toast test"
+' type="button">Copy</button><pre class="reveal"><code class="language-powershell">Import-Module BurntToast
+
+New-BurntToastNotification `
+    -Text "Test", "Toast test"
+</code></pre>
+<p class="reveal">Then verify the hook configuration is in:</p>
+<button class="copy-btn" data-copy="%USERPROFILE%\.copilot\hooks\
+" type="button">Copy</button><pre class="reveal"><code class="language-text">%USERPROFILE%\.copilot\hooks\
+</code></pre>
+<p class="reveal">and restart Copilot.</p>
+<hr/>
+<h2 class="reveal" id="copilot-tab-title-changes-unexpectedly">Copilot tab title changes unexpectedly</h2>
+<p class="reveal">Check Copilot settings:</p>
+<button class="copy-btn" data-copy="updateTerminalTitle
+" type="button">Copy</button><pre class="reveal"><code class="language-text">updateTerminalTitle
+</code></pre>
+<p class="reveal">It should be:</p>
+<button class="copy-btn" data-copy='"updateTerminalTitle": false
+' type="button">Copy</button><pre class="reveal"><code class="language-json">"updateTerminalTitle": false
+</code></pre>
+<p class="reveal">If it is <code>true</code>, Copilot may overwrite the stable tab identifier.</p>
+<hr/>
+<h2 class="reveal" id="wt-session-is-empty"><code>WT_SESSION</code> is empty</h2>
+<p class="reveal">Run:</p>
+<button class="copy-btn" data-copy="$env:WT_SESSION
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">$env:WT_SESSION
+</code></pre>
+<p class="reveal">If it is empty, the command is not running in a Windows Terminal session or the environment has been changed.</p>
+<p class="reveal">The notification script intentionally fails open in this case.</p>
+<hr/>
+<h1>20. Adding more notification events</h1>
+<p class="reveal">To add:</p>
+<button class="copy-btn" data-copy="shell_completed
+shell_detached_completed
+agent_idle
+" type="button">Copy</button><pre class="reveal"><code class="language-text">shell_completed
+shell_detached_completed
+agent_idle
+</code></pre>
+<p class="reveal">add additional entries to the <code>notification</code> array.</p>
+<p class="reveal">For example:</p>
+<button class="copy-btn" data-copy="{
+  &quot;type&quot;: &quot;command&quot;,
+  &quot;matcher&quot;: &quot;shell_completed&quot;,
+  &quot;powershell&quot;: &quot;&amp; \&quot;$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\&quot; -Title 'Shell completed' -Message 'A background shell command has finished.'&quot;,
+  &quot;timeoutSec&quot;: 5
+}
+" type="button">Copy</button><pre class="reveal"><code class="language-json">{
+  "type": "command",
+  "matcher": "shell_completed",
+  "powershell": "&amp; \"$env:USERPROFILE\\.copilot\\hooks\\copilot-notify.ps1\" -Title 'Shell completed' -Message 'A background shell command has finished.'",
+  "timeoutSec": 5
+}
+</code></pre>
+<p class="reveal">The foreground/background logic does not need to change.</p>
+<p class="reveal">All new notifications automatically pass through:</p>
+<button class="copy-btn" data-copy="notification-hooks.json
+        |
+        v
+copilot-notify.ps1
+        |
+        v
+foreground + selected-tab decision
+" type="button">Copy</button><pre class="reveal"><code class="language-text">notification-hooks.json
+        |
+        v
+copilot-notify.ps1
+        |
+        v
+foreground + selected-tab decision
+</code></pre>
+<hr/>
+<h1>21. Why this architecture is useful</h1>
+<p class="reveal">This separates responsibilities cleanly.</p>
+<h3 class="reveal" id="copilot-cli">Copilot CLI</h3>
+<p class="reveal">Responsible for:</p>
+<button class="copy-btn" data-copy="What happened?
+" type="button">Copy</button><pre class="reveal"><code class="language-text">What happened?
+</code></pre>
+<h3 class="reveal" id="hook-configuration">Hook configuration</h3>
+<p class="reveal">Responsible for:</p>
+<button class="copy-btn" data-copy="Which events do we care about?
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Which events do we care about?
+</code></pre>
+<h3 class="reveal" id="notification-script">Notification script</h3>
+<p class="reveal">Responsible for:</p>
+<button class="copy-btn" data-copy="Should the user be interrupted?
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Should the user be interrupted?
+</code></pre>
+<h3 class="reveal" id="burnttoast-2">BurntToast</h3>
+<p class="reveal">Responsible for:</p>
+<button class="copy-btn" data-copy="How should Windows display the notification?
+" type="button">Copy</button><pre class="reveal"><code class="language-text">How should Windows display the notification?
+</code></pre>
+<p class="reveal">This is preferable to trying to make one script understand the entire Copilot lifecycle.</p>
+<hr/>
+<h1>22. Known limitations</h1>
+<p class="reveal">This solution is practical rather than an official Copilot/Windows Terminal integration.</p>
+<h3 class="reveal" id="windows-terminal-dependency">Windows Terminal dependency</h3>
+<p class="reveal">The exact-tab logic assumes Windows Terminal and its UI Automation tree.</p>
+<p class="reveal">It is not intended to be a generic solution for every terminal emulator.</p>
+<h3 class="reveal" id="stable-title-dependency">Stable-title dependency</h3>
+<p class="reveal">The notification script intentionally uses the stable title:</p>
+<button class="copy-btn" data-copy="Copilot [XXXXXXXX]
+" type="button">Copy</button><pre class="reveal"><code class="language-text">Copilot [XXXXXXXX]
+</code></pre>
+<p class="reveal">If the wrapper is removed or another process changes the tab title, the exact-tab check can fail.</p>
+<p class="reveal">The script is deliberately fail-open, so a detection failure results in a toast rather than silently losing the notification.</p>
+<h3 class="reveal" id="ui-automation-dependency">UI Automation dependency</h3>
+<p class="reveal">UI Automation is a Windows accessibility/automation mechanism rather than a Copilot API.</p>
+<p class="reveal">A future Windows Terminal implementation could change its exposed UI Automation hierarchy, which could require adjusting the script.</p>
+<h3 class="reveal" id="multiple-panes">Multiple panes</h3>
+<p class="reveal">Windows Terminal can host multiple panes within a tab. The current implementation is designed around the Terminal tab level, not detailed pane-level focus management.</p>
+<hr/>
+<h1>23. Rollback</h1>
+<p class="reveal">To disable the custom behavior without uninstalling everything:</p>
+<ol class="reveal">
+<li>Remove or rename:</li>
+</ol>
+<button class="copy-btn" data-copy="%USERPROFILE%\.copilot\hooks\notification-hooks.json
+" type="button">Copy</button><pre class="reveal"><code class="language-text">%USERPROFILE%\.copilot\hooks\notification-hooks.json
+</code></pre>
+<ol class="reveal" start="2">
+<li>Restart Copilot.</li>
+</ol>
+<p class="reveal">To restore the old script:</p>
+<button class="copy-btn" data-copy='Copy-Item `
+    "$HOME\.copilot\hooks\copilot-notify.ps1.bak" `
+    "$HOME\.copilot\hooks\copilot-notify.ps1" `
+    -Force
+' type="button">Copy</button><pre class="reveal"><code class="language-powershell">Copy-Item `
+    "$HOME\.copilot\hooks\copilot-notify.ps1.bak" `
+    "$HOME\.copilot\hooks\copilot-notify.ps1" `
+    -Force
+</code></pre>
+<p class="reveal">To remove BurntToast:</p>
+<button class="copy-btn" data-copy="Uninstall-Module BurntToast
+" type="button">Copy</button><pre class="reveal"><code class="language-powershell">Uninstall-Module BurntToast
+</code></pre>
+<p class="reveal">The exact Copilot hook files can also simply be deleted if the custom notification system is no longer required.</p>
+<hr/>
+<h1>24. Current end state</h1>
+<p class="reveal">The completed system can be summarized as:</p>
+<button class="copy-btn" data-copy="                    GitHub Copilot CLI
+                           |
+                           |
+                  Native hook event
+                           |
+                           v
+               notification-hooks.json
+                           |
+                           v
+                  copilot-notify.ps1
+                           |
+             +-------------+-------------+
+             |                           |
+       Win32 foreground             UI Automation
+          detection                  Terminal tabs
+             |                           |
+             +-------------+-------------+
+                           |
+                           v
+                Is exact Copilot tab
+                    selected?
+                     /     \
+                   YES      NO
+                    |        |
+               suppress     toast
+                            |
+                            v
+                       BurntToast
+                            |
+                            v
+                    Windows desktop toast
+" type="button">Copy</button><pre class="reveal"><code class="language-text">                    GitHub Copilot CLI
+                           |
+                           |
+                  Native hook event
+                           |
+                           v
+               notification-hooks.json
+                           |
+                           v
+                  copilot-notify.ps1
+                           |
+             +-------------+-------------+
+             |                           |
+       Win32 foreground             UI Automation
+          detection                  Terminal tabs
+             |                           |
+             +-------------+-------------+
+                           |
+                           v
+                Is exact Copilot tab
+                    selected?
+                     /     \
+                   YES      NO
+                    |        |
+               suppress     toast
+                            |
+                            v
+                       BurntToast
+                            |
+                            v
+                    Windows desktop toast
+</code></pre>
+<p class="reveal">This gives Copilot CLI the behavior it currently does not provide as a built-in foreground-aware Windows notification preference: <strong>notify only when attention is actually needed.</strong></p>
+<hr/>
+<h1>25. References</h1>
+<ul class="reveal">
+<li>GitHub Copilot hooks reference:
+https://docs.github.com/en/copilot/reference/hooks-reference</li>
+<li>GitHub Copilot CLI hooks:
+https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-hooks</li>
+<li>GitHub Copilot CLI configuration reference:
+https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference</li>
+<li>Microsoft Learn — GetForegroundWindow:
+https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow</li>
+<li>Microsoft Learn — Windows Terminal command-line arguments and titles:
+https://learn.microsoft.com/en-us/windows/terminal/command-line-arguments</li>
+<li>Microsoft Learn — Windows Terminal profile/tab title settings:
+https://learn.microsoft.com/en-us/windows/terminal/customize-settings/profile-general</li>
+<li>Microsoft Learn — UI Automation TabItem:
+https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-supporttabitemcontroltype</li>
+<li>Microsoft Learn — UI Automation Tab Control:
+https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-supporttabcontroltype</li>
+</ul>
+
+</article></section>
+</main>
+<footer><div class="container footer-grid"><div>Built as a practical Copilot CLI extension for Windows.</div><div>Design approach inspired by Apple HIG principles: clarity, simplicity, hierarchy, craft, responsive motion, and reduced-motion support.</div><div><a href="https://developer.apple.com/design/human-interface-guidelines/" target="_blank" rel="noreferrer">Apple Human Interface Guidelines ↗</a>&nbsp;·&nbsp;<a href="https://docs.github.com/en/copilot/reference/hooks-reference" target="_blank" rel="noreferrer">Copilot hooks reference ↗</a></div></div></footer>
+
+<div class="search-overlay" id="searchOverlay"><div class="search-box"><input class="search-input" id="searchInput" placeholder="Search the documentation…" autocomplete="off"><div class="search-results" id="searchResults"></div></div></div>
+
+<script>
+(function(){
+  const root=document.documentElement, themeBtn=document.getElementById('themeBtn'), motionBtn=document.getElementById('motionBtn'), searchBtn=document.getElementById('searchBtn'), overlay=document.getElementById('searchOverlay'), input=document.getElementById('searchInput'), results=document.getElementById('searchResults');
+  if(localStorage.getItem('copilot-theme')==='dark') root.classList.add('dark');
+  function applyMotion(){const reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches; const manual=localStorage.getItem('copilot-motion')==='off'; root.classList.toggle('no-motion',reduced||manual);}
+  applyMotion();
+  themeBtn.addEventListener('click',()=>{root.classList.toggle('dark');localStorage.setItem('copilot-theme',root.classList.contains('dark')?'dark':'light');});
+  function syncMotionButton(){
+    const off = localStorage.getItem('copilot-motion') === 'off';
+    motionBtn.textContent = off ? '⌁' : '≈';
+    motionBtn.setAttribute('aria-label', off ? 'Enable motion' : 'Reduce motion');
+    motionBtn.setAttribute('title', off ? 'Enable motion' : 'Reduce motion');
+  }
+  syncMotionButton();
+  motionBtn.addEventListener('click',()=>{
+    const off=localStorage.getItem('copilot-motion')!=='off';
+    localStorage.setItem('copilot-motion',off?'off':'on');
+    applyMotion();
+    syncMotionButton();
+  });
+  document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.getElementById('tab-'+btn.dataset.tab).classList.add('active');}));
+  document.querySelectorAll('.copy-btn').forEach(btn=>btn.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(btn.dataset.copy);const old=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=old,1100);}catch{btn.textContent='Select + copy';setTimeout(()=>btn.textContent='Copy',1100);}}));
+  const revealObserver=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.08}); document.querySelectorAll('.reveal').forEach(el=>revealObserver.observe(el));
+  const heads=[...document.querySelectorAll('#content h2,#content h3')], links=[...document.querySelectorAll('.toc-link')];
+  const headingObserver=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting)links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id));}),{rootMargin:'-20% 0px -65% 0px',threshold:0}); heads.forEach(h=>headingObserver.observe(h));
+  const searchIndex=heads.map(h=>({id:h.id,title:h.textContent.trim(),text:(h.parentElement.innerText||'').slice(0,450)}));
+  function renderSearch(q){const query=q.trim().toLowerCase();const items=(!query?searchIndex.slice(0,8):searchIndex.filter(x=>(x.title+' '+x.text).toLowerCase().includes(query)).slice(0,12));results.innerHTML=items.length?items.map(x=>'<div class="search-result" data-id="'+x.id+'"><strong>'+x.title+'</strong><small>'+x.text.replace(/\s+/g,' ').slice(0,180)+'</small></div>').join(''):'<div class="search-result"><strong>No results</strong><small>Try another term.</small></div>';}
+  searchBtn.addEventListener('click',()=>{overlay.style.display='flex';input.value='';renderSearch('');setTimeout(()=>input.focus(),0);});
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.style.display='none';});
+  input.addEventListener('input',e=>renderSearch(e.target.value));
+  results.addEventListener('click',e=>{const item=e.target.closest('.search-result');if(!item||!item.dataset.id)return;overlay.style.display='none';document.getElementById(item.dataset.id)?.scrollIntoView({behavior:'smooth',block:'start'});});
+  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();searchBtn.click();}if(e.key==='Escape')overlay.style.display='none';});
+})();
+</script>
+</body></html>
