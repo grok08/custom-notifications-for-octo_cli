@@ -405,6 +405,33 @@ agent_idle
 )
 
 # ------------------------------------------------------------
+# Identify the hook source.
+#
+# VS Code Copilot sends hook_event_name = &quot;Stop&quot;.
+# This notification system is intended for Copilot CLI only.
+# Ignore the VS Code Stop event.
+# ------------------------------------------------------------
+
+$hookInput = $null
+
+if ([Console]::IsInputRedirected) {
+    try {
+        $stdinText = [Console]::In.ReadToEnd()
+
+        if (-not [string]::IsNullOrWhiteSpace($stdinText)) {
+            $hookInput = $stdinText | ConvertFrom-Json -ErrorAction Stop
+        }
+    }
+    catch {
+        # Ignore malformed or unavailable hook input.
+    }
+}
+
+if ($hookInput -and $hookInput.hook_event_name -eq &quot;Stop&quot;) {
+    exit 0
+}
+
+# ------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------
 
@@ -597,6 +624,33 @@ New-BurntToastNotification -Text $Title, $Message
     [Parameter(Mandatory=$true)]
     [string]$Message
 )
+
+# ------------------------------------------------------------
+# Identify the hook source.
+#
+# VS Code Copilot sends hook_event_name = &quot;Stop&quot;.
+# This notification system is intended for Copilot CLI only.
+# Ignore the VS Code Stop event.
+# ------------------------------------------------------------
+
+$hookInput = $null
+
+if ([Console]::IsInputRedirected) {
+    try {
+        $stdinText = [Console]::In.ReadToEnd()
+
+        if (-not [string]::IsNullOrWhiteSpace($stdinText)) {
+            $hookInput = $stdinText | ConvertFrom-Json -ErrorAction Stop
+        }
+    }
+    catch {
+        # Ignore malformed or unavailable hook input.
+    }
+}
+
+if ($hookInput -and $hookInput.hook_event_name -eq &quot;Stop&quot;) {
+    exit 0
+}
 
 # ------------------------------------------------------------
 # Configuration
