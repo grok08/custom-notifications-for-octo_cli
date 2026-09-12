@@ -2,7 +2,7 @@
 
 A Windows notification layer for **GitHub Copilot CLI** that surfaces important Copilot events only when the relevant CLI session is not already visible.
 
-The project combines **Copilot hooks, PowerShell, Win32 APIs, Windows UI Automation, Windows Terminal, and BurntToast** to answer a simple question:
+The project combines **Copilot hooks, PowerShell, Win32 APIs, Windows UI Automation, Windows Terminal, BurntToast, and a bundled Copilot mascot asset** to answer a simple question:
 
 > **Does Copilot actually need my attention right now?**
 
@@ -170,10 +170,19 @@ Copilot session
 
 When the Copilot CLI session is not visible, the script uses the PowerShell **BurntToast** module to generate the Windows desktop toast.
 
+The notification uses a bundled Copilot mascot asset as the app logo:
+
 ```powershell
 Import-Module BurntToast
-New-BurntToastNotification -Text $Title, $Message
+
+$iconPath = Join-Path $PSScriptRoot "copilot-mascot.png"
+
+New-BurntToastNotification `
+    -Text $Title, $Message `
+    -AppLogo $iconPath
 ```
+
+The installer copies the mascot into the same `.copilot\hooks` directory as the notification script so the installed script can resolve it reliably.
 
 ## Architecture
 
@@ -214,18 +223,19 @@ New-BurntToastNotification -Text $Title, $Message
 
 ## Files
 
-The current implementation uses:
+The installed implementation uses:
 
 ```text
 %USERPROFILE%\.copilot\
 └── hooks\
     ├── notification-hooks.json
-    └── copilot-notify.ps1
+    ├── copilot-notify.ps1
+    └── copilot-mascot.png
 ```
 
 A PowerShell profile wrapper is also used to assign the stable Copilot Terminal tab title.
 
-The repository contains the interactive documentation page for the project.
+The repository also contains the npm package source and the interactive documentation page for the project.
 
 ## Configuration
 
@@ -375,25 +385,68 @@ Current limitations include:
 - The current implementation uses BurntToast for rendering.
 - Additional Copilot notification events such as `shell_completed`, `shell_detached_completed`, and `agent_idle` are not currently enabled.
 
-## Future direction
+## npm package
 
-The next planned step is to package the working implementation as an npm-based installer so another Windows machine can install the system with a single command:
+The working prototype is now being packaged as a Windows-focused npm CLI.
+
+The intended installation experience is:
 
 ```powershell
-npm install -g @scope/copilot-notify
+npm install -g @infomagnus/copilot-notify
 ```
 
-The npm package would automate the current setup rather than changing the notification architecture itself.
+The package installer is designed to automate the current setup by:
+
+1. Checking Windows, PowerShell, GitHub Copilot CLI, Windows Terminal, and BurntToast.
+2. Creating the Copilot hooks directory.
+3. Backing up an existing `notification-hooks.json`.
+4. Installing `copilot-notify.ps1`.
+5. Installing the bundled Copilot mascot.
+6. Generating the hook configuration with the correct local path.
+7. Installing the PowerShell `copilot` wrapper.
+8. Setting `updateTerminalTitle` to `false`.
+9. Verifying the installation.
+
+The package also exposes a CLI with:
+
+```powershell
+copilot-notify test
+copilot-notify status
+```
+
+The current implementation is still being validated locally before publication to the npm registry.
+
+## Future direction
 
 Potential future additions include:
 
-- installation validation
-- `status` and `test` commands
 - repair/uninstall support
 - safer hook configuration merging
-- bundled notification branding
 - additional Copilot CLI events
 - broader terminal support
+- improved package upgrade handling
+- support for additional agent clients where the hook/session model allows it
+
+## Repository layout
+
+```text
+copilot-notify/
+├── assets/
+│   └── copilot-mascot.png
+├── bin/
+│   └── copilot-notify.js
+├── hooks/
+│   └── notification-hooks.json
+├── install/
+│   └── install.js
+├── powershell/
+│   ├── copilot-notify.ps1
+│   └── terminal-wrapper.ps1
+├── package.json
+└── README.md
+```
+
+The Node.js code is responsible for packaging, installation, configuration, and the CLI surface. The PowerShell code is responsible for the Windows-specific notification and Terminal-context logic.
 
 ## Interactive documentation
 
@@ -405,7 +458,7 @@ https://grok08.github.io/custom-notifications-for-octo_cli/
 
 ## Project status
 
-**Status: Working prototype / MVP candidate**
+**Status: Working prototype / npm MVP in development**
 
 The core behavior has been manually verified for:
 
@@ -413,6 +466,9 @@ The core behavior has been manually verified for:
 - Copilot CLI completion after switching to another Windows Terminal tab.
 - Copilot CLI completion after switching to another application.
 - VS Code Copilot completion without generating a notification.
+- Copilot notifications using the bundled mascot.
+- Local installer verification for the required Windows components.
+- Local `copilot-notify test` execution.
 
 ## Author
 
