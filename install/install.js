@@ -1,8 +1,8 @@
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { execFileSync } = require("child_process");
-
 
 function checkWindows() {
     if (os.platform() !== "win32") {
@@ -17,7 +17,12 @@ function checkPowerShell() {
     try {
         execFileSync(
             "powershell.exe",
-            ["-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSVersion.ToString()"],
+            [
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$PSVersionTable.PSVersion.ToString()"
+            ],
             {
                 stdio: "pipe",
                 encoding: "utf8"
@@ -30,7 +35,6 @@ function checkPowerShell() {
         process.exit(1);
     }
 }
-
 
 function checkCopilot() {
     const candidates = [
@@ -78,7 +82,7 @@ function checkWindowsTerminal() {
         );
 
         console.log("✓ Windows Terminal detected");
-    } catch (error) {
+    } catch {
         console.error("✗ Windows Terminal was not detected.");
         console.error("  Copilot Notify requires Windows Terminal.");
         process.exit(1);
@@ -101,7 +105,7 @@ function checkBurntToast() {
         );
 
         console.log("✓ BurntToast detected");
-    } catch (error) {
+    } catch {
         console.error("✗ BurntToast was not detected.");
         console.error("  BurntToast is required for Windows toast notifications.");
         console.error("  Install it with:");
@@ -111,11 +115,10 @@ function checkBurntToast() {
 }
 
 function getCopilotHome() {
-    const copilotHome =
+    return (
         process.env.COPILOT_HOME ||
-        `${process.env.USERPROFILE}\\.copilot`;
-
-    return copilotHome;
+        `${process.env.USERPROFILE}\\.copilot`
+    );
 }
 
 function getHooksDirectory() {
@@ -132,55 +135,76 @@ function checkCopilotHooksDirectory() {
     console.log(`✓ Copilot hooks directory ready (${hooksDirectory})`);
 }
 
-function installNotificationScript() {
-    const packageRoot = path.resolve(__dirname, "..");
-
-    const sourceScript = path.join(
-        packageRoot,
-        "powershell",
-        "copilot-notify.ps1"
-    );
-
-    const targetScript = path.join(
+function getInstallStatePath() {
+    return path.join(
         getHooksDirectory(),
-        "copilot-notify.ps1"
+        ".copilot-notify-state.json"
     );
-
-    if (!fs.existsSync(sourceScript)) {
-        console.error(`✗ Notification script not found: ${sourceScript}`);
-        process.exit(1);
-    }
-
-    fs.copyFileSync(sourceScript, targetScript);
-
-    console.log(`✓ Notification script installed`);
 }
 
-function installNotificationIcon() {
-    const packageRoot = path.resolve(__dirname, "..");
-
-    const sourceIcon = path.join(
-        packageRoot,
-        "assets",
-        "copilot-mascot.png"
-    );
-
-    const targetIcon = path.join(
-        getHooksDirectory(),
-        "copilot-mascot.png"
-    );
-
-    if (!fs.existsSync(sourceIcon)) {
-        console.error(`✗ Copilot mascot not found: ${sourceIcon}`);
+function readJsonFile(filePath, description) {
+    try {
+        return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    } catch {
+        console.error(`✗ Could not parse ${description}.`);
+        console.error("  Aborting to avoid modifying existing configuration.");
         process.exit(1);
     }
-
-    fs.copyFileSync(sourceIcon, targetIcon);
-
-    console.log("✓ Copilot mascot installed");
 }
 
-function backupExistingHookConfiguration() {
+function getFileHash(filePath) {
+    return crypto
+        .createHash("sha256")
+        .update(fs.readFileSync(filePath))
+        .digest("hex");
+}
+
+function abortForUnownedFile(filePath, description) {
+    console.error(
+        `✗ ${description} already exists and is not owned by Copilot Notify: ${filePath}`
+    );
+    console.error(
+        "  Aborting installation to avoid overwriting user data."
+    );
+    process.exit(1);
+}
+
+function checkInstallFileOwnership(
+    targetPath,
+    previousCreated,
+    previousHash,
+    description
+) {
+    if (!fs.existsSync(targetPath)) {
+        return false;
+    }
+
+    if (
+        previousCreated &&
+        previousHash &&
+        getFileHash(targetPath) === previousHash
+    ) {
+        return true;
+    }
+
+    abortForUnownedFile(
+        targetPath,
+        description
+    );
+}
+
+function recordInstalledFile(
+    state,
+    createdKey,
+    hashKey,
+    targetPath
+) {
+    state[createdKey] = true;
+    state[hashKey] = getFileHash(targetPath);
+    saveInstallationState(state);
+}
+
+function validateExistingHookConfiguration() {
     const targetPath = path.join(
         getHooksDirectory(),
         "notification-hooks.json"
@@ -190,79 +214,30 @@ function backupExistingHookConfiguration() {
         return;
     }
 
-    const backupPath = `${targetPath}.backup`;
-
-    fs.copyFileSync(targetPath, backupPath);
-
-    console.log(`✓ Existing hook configuration backed up`);
-}
-
-function installHookConfiguration() {
-    const packageRoot = path.resolve(__dirname, "..");
-
-    const templatePath = path.join(
-        packageRoot,
-        "hooks",
-        "notification-hooks.json"
-    );
-
-    const targetPath = path.join(
-        getHooksDirectory(),
-        "notification-hooks.json"
-    );
-
-    if (!fs.existsSync(templatePath)) {
-        console.error(`✗ Hook template not found: ${templatePath}`);
-        process.exit(1);
-    }
-
-    const notificationScriptPath = path.join(
-        getHooksDirectory(),
-        "copilot-notify.ps1"
-    );
-
-    const powershellCommand =
-        `& "${notificationScriptPath}"`;
-
-    const escapedPowerShellCommand =
-        JSON.stringify(powershellCommand).slice(1, -1);
-
-    let template = fs.readFileSync(templatePath, "utf8");
-
-    template = template.replace(
-        /COPILOT_NOTIFY_COMMAND_PLACEHOLDER/g,
-        escapedPowerShellCommand
-    );
-
-    fs.writeFileSync(
+    const existingHooks = readJsonFile(
         targetPath,
-        template,
-        "utf8"
+        "existing notification-hooks.json"
     );
 
-    console.log("✓ Copilot hook configuration installed");
-}
-
-function installPowerShellWrapper() {
-    const packageRoot = path.resolve(__dirname, "..");
-
-    const wrapperPath = path.join(
-        packageRoot,
-        "powershell",
-        "terminal-wrapper.ps1"
-    );
-
-    if (!fs.existsSync(wrapperPath)) {
-        console.error(`✗ PowerShell wrapper not found: ${wrapperPath}`);
+    if (
+        existingHooks.hooks !== undefined &&
+        (
+            !existingHooks.hooks ||
+            typeof existingHooks.hooks !== "object" ||
+            Array.isArray(existingHooks.hooks)
+        )
+    ) {
+        console.error(
+            "✗ Existing notification-hooks.json has an invalid hooks object."
+        );
+        console.error(
+            "  Aborting to avoid modifying existing configuration."
+        );
         process.exit(1);
     }
+}
 
-    const powershellCommand = `
-# >>> copilot-notify >>>
-. "${wrapperPath}"
-# <<< copilot-notify <<<
-`;
-
+function getPowerShellProfilePath() {
     const profilePath = execFileSync(
         "powershell.exe",
         [
@@ -281,9 +256,71 @@ function installPowerShellWrapper() {
         process.exit(1);
     }
 
-    const existingProfile = fs.existsSync(profilePath)
-        ? fs.readFileSync(profilePath, "utf8")
-        : "";
+    return profilePath;
+}
+
+function captureInstallationState() {
+    const hooksDirectory = getHooksDirectory();
+    const packageRoot = path.resolve(__dirname, "..");
+
+    const targetScript = path.join(
+        hooksDirectory,
+        "copilot-notify.ps1"
+    );
+
+    const sourceScript = path.join(
+        packageRoot,
+        "powershell",
+        "copilot-notify.ps1"
+    );
+
+    const targetIcon = path.join(
+        hooksDirectory,
+        "copilot-mascot.png"
+    );
+
+    const sourceIcon = path.join(
+        packageRoot,
+        "assets",
+        "copilot-mascot.png"
+    );
+
+    const hookConfigPath = path.join(
+        hooksDirectory,
+        "notification-hooks.json"
+    );
+
+    const settingsPath = path.join(
+        getCopilotHome(),
+        "settings.json"
+    );
+
+    const profilePath = getPowerShellProfilePath();
+
+    const notificationScriptCreated =
+        checkInstallFileOwnership(
+            targetScript,
+            false,
+            null,
+            "Notification script"
+        );
+
+    const notificationIconCreated =
+        checkInstallFileOwnership(
+            targetIcon,
+            false,
+            null,
+            "Copilot mascot"
+        );
+
+    let existingProfile = "";
+
+    if (fs.existsSync(profilePath)) {
+        existingProfile = fs.readFileSync(
+            profilePath,
+            "utf8"
+        );
+    }
 
     const startMarker = "# >>> copilot-notify >>>";
     const endMarker = "# <<< copilot-notify <<<";
@@ -291,21 +328,412 @@ function installPowerShellWrapper() {
     const startIndex = existingProfile.indexOf(startMarker);
     const endIndex = existingProfile.indexOf(endMarker);
 
+    const previousProfileBlock =
+        startIndex !== -1 &&
+        endIndex !== -1 &&
+        endIndex >= startIndex
+            ? existingProfile.slice(
+                startIndex,
+                endIndex + endMarker.length
+            )
+            : null;
+
+    let settings = {};
+    const settingsFileExisted = fs.existsSync(settingsPath);
+
+    if (settingsFileExisted) {
+        settings = readJsonFile(
+            settingsPath,
+            "Copilot settings.json"
+        );
+    }
+
+    const updateTerminalTitleExisted =
+        Object.prototype.hasOwnProperty.call(
+            settings,
+            "updateTerminalTitle"
+        );
+
+    return {
+        version: 1,
+
+        hookConfigExisted:
+            fs.existsSync(hookConfigPath),
+
+        notificationScriptExisted:
+            fs.existsSync(targetScript),
+
+        notificationScriptCreated:
+            notificationScriptCreated,
+
+        notificationScriptHash: null,
+
+        notificationIconExisted:
+            fs.existsSync(targetIcon),
+
+        notificationIconCreated:
+            notificationIconCreated,
+
+        notificationIconHash: null,
+
+        profile: {
+            path: profilePath,
+            previousBlock: previousProfileBlock
+        },
+
+        settings: {
+            path: settingsPath,
+            fileExisted: settingsFileExisted,
+            updateTerminalTitleExisted,
+            updateTerminalTitleValue:
+                settings.updateTerminalTitle
+        }
+    };
+}
+
+function saveInstallationState(state) {
+    fs.writeFileSync(
+        getInstallStatePath(),
+        JSON.stringify(state, null, 2) + "\n",
+        "utf8"
+    );
+}
+
+function loadInstallationState() {
+    const statePath = getInstallStatePath();
+
+    if (!fs.existsSync(statePath)) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(
+            fs.readFileSync(statePath, "utf8")
+        );
+    } catch {
+        console.error(
+            "✗ Copilot Notify installation state is invalid JSON."
+        );
+        console.error(
+            "  Aborting installation to avoid modifying user configuration."
+        );
+        process.exit(1);
+    }
+}
+
+function installNotificationScript() {
+    const packageRoot = path.resolve(__dirname, "..");
+
+    const sourceScript = path.join(
+        packageRoot,
+        "powershell",
+        "copilot-notify.ps1"
+    );
+
+    const targetScript = path.join(
+        getHooksDirectory(),
+        "copilot-notify.ps1"
+    );
+
+    if (!fs.existsSync(sourceScript)) {
+        console.error(
+            `✗ Notification script not found: ${sourceScript}`
+        );
+        process.exit(1);
+    }
+
+    const state = loadInstallationState();
+
+    checkInstallFileOwnership(
+        targetScript,
+        state?.notificationScriptCreated,
+        state?.notificationScriptHash,
+        "Notification script"
+    );
+
+    fs.copyFileSync(
+        sourceScript,
+        targetScript
+    );
+
+    recordInstalledFile(
+        state,
+        "notificationScriptCreated",
+        "notificationScriptHash",
+        targetScript
+    );
+
+    console.log("✓ Notification script installed");
+}
+
+function installNotificationIcon() {
+    const packageRoot = path.resolve(__dirname, "..");
+
+    const sourceIcon = path.join(
+        packageRoot,
+        "assets",
+        "copilot-mascot.png"
+    );
+
+    const targetIcon = path.join(
+        getHooksDirectory(),
+        "copilot-mascot.png"
+    );
+
+    if (!fs.existsSync(sourceIcon)) {
+        console.error(
+            `✗ Copilot mascot not found: ${sourceIcon}`
+        );
+        process.exit(1);
+    }
+
+    const state = loadInstallationState();
+
+    checkInstallFileOwnership(
+        targetIcon,
+        state?.notificationIconCreated,
+        state?.notificationIconHash,
+        "Copilot mascot"
+    );
+
+    fs.copyFileSync(
+        sourceIcon,
+        targetIcon
+    );
+
+    recordInstalledFile(
+        state,
+        "notificationIconCreated",
+        "notificationIconHash",
+        targetIcon
+    );
+
+    console.log("✓ Copilot mascot installed");
+}
+
+function installHookConfiguration() {
+    const packageRoot = path.resolve(__dirname, "..");
+
+    const templatePath = path.join(
+        packageRoot,
+        "hooks",
+        "notification-hooks.json"
+    );
+
+    const targetPath = path.join(
+        getHooksDirectory(),
+        "notification-hooks.json"
+    );
+
+    if (!fs.existsSync(templatePath)) {
+        console.error(
+            `✗ Hook template not found: ${templatePath}`
+        );
+        process.exit(1);
+    }
+
+    const notificationScriptPath = path.join(
+        getHooksDirectory(),
+        "copilot-notify.ps1"
+    );
+
+    const powershellCommand =
+        `& "${notificationScriptPath}"`;
+
+    const escapedPowerShellCommand =
+        JSON.stringify(powershellCommand).slice(1, -1);
+
+    let template = fs.readFileSync(
+        templatePath,
+        "utf8"
+    );
+
+    template = template.replace(
+        /COPILOT_NOTIFY_COMMAND_PLACEHOLDER/g,
+        escapedPowerShellCommand
+    );
+
+    let packageHooks;
+
+    try {
+        packageHooks = JSON.parse(template);
+    } catch {
+        console.error(
+            "✗ Package hook configuration is invalid JSON."
+        );
+        process.exit(1);
+    }
+
+    let existingHooks = {
+        version: 1,
+        hooks: {}
+    };
+
+    if (fs.existsSync(targetPath)) {
+        existingHooks = readJsonFile(
+            targetPath,
+            "existing notification-hooks.json"
+        );
+    }
+
+    if (
+        existingHooks.hooks === undefined
+    ) {
+        existingHooks.hooks = {};
+    }
+
+    /*
+     * Remove any Copilot Notify hooks from a previous
+     * installation before adding the current ones.
+     * This makes installation idempotent.
+     */
+    for (
+        const [eventName, hooks]
+        of Object.entries(existingHooks.hooks)
+    ) {
+        if (!Array.isArray(hooks)) {
+            continue;
+        }
+
+        existingHooks.hooks[eventName] =
+            hooks.filter((hook) => {
+                if (
+                    !hook ||
+                    hook.type !== "command"
+                ) {
+                    return true;
+                }
+
+                const command =
+                    hook.powershell || "";
+
+                return !command.includes(
+                    "copilot-notify.ps1"
+                );
+            });
+
+        if (
+            existingHooks.hooks[eventName].length === 0
+        ) {
+            delete existingHooks.hooks[eventName];
+        }
+    }
+
+    /*
+     * Add our hooks while preserving every unrelated
+     * user hook already present in the file.
+     */
+    for (
+        const [eventName, hooks]
+        of Object.entries(packageHooks.hooks)
+    ) {
+        if (
+            !Array.isArray(
+                existingHooks.hooks[eventName]
+            )
+        ) {
+            existingHooks.hooks[eventName] = [];
+        }
+
+        existingHooks.hooks[eventName].push(
+            ...hooks
+        );
+    }
+
+    existingHooks.version =
+        existingHooks.version ||
+        packageHooks.version ||
+        1;
+
+    fs.writeFileSync(
+        targetPath,
+        JSON.stringify(
+            existingHooks,
+            null,
+            2
+        ) + "\n",
+        "utf8"
+    );
+
+    console.log(
+        "✓ Copilot hook configuration merged"
+    );
+}
+
+function installPowerShellWrapper() {
+    const packageRoot = path.resolve(__dirname, "..");
+
+    const wrapperPath = path.join(
+        packageRoot,
+        "powershell",
+        "terminal-wrapper.ps1"
+    );
+
+    if (!fs.existsSync(wrapperPath)) {
+        console.error(
+            `✗ PowerShell wrapper not found: ${wrapperPath}`
+        );
+        process.exit(1);
+    }
+
+    const powershellCommand = `
+# >>> copilot-notify >>>
+. "${wrapperPath}"
+# <<< copilot-notify <<<
+`;
+
+    const profilePath =
+        getPowerShellProfilePath();
+
+    const existingProfile =
+        fs.existsSync(profilePath)
+            ? fs.readFileSync(
+                profilePath,
+                "utf8"
+            )
+            : "";
+
+    const startMarker =
+        "# >>> copilot-notify >>>";
+
+    const endMarker =
+        "# <<< copilot-notify <<<";
+
+    const startIndex =
+        existingProfile.indexOf(startMarker);
+
+    const endIndex =
+        existingProfile.indexOf(endMarker);
+
     let updatedProfile = existingProfile;
 
-    if (startIndex !== -1 && endIndex !== -1) {
-        const endPosition = endIndex + endMarker.length;
+    if (
+        startIndex !== -1 &&
+        endIndex !== -1 &&
+        endIndex >= startIndex
+    ) {
+        const endPosition =
+            endIndex + endMarker.length;
 
         updatedProfile =
-            existingProfile.slice(0, startIndex) +
+            existingProfile.slice(
+                0,
+                startIndex
+            ) +
             powershellCommand.trim() +
-            existingProfile.slice(endPosition);
+            existingProfile.slice(
+                endPosition
+            );
     } else {
-        if (updatedProfile && !updatedProfile.endsWith("\n")) {
+        if (
+            updatedProfile &&
+            !updatedProfile.endsWith("\n")
+        ) {
             updatedProfile += "\n";
         }
 
-        updatedProfile += powershellCommand;
+        updatedProfile +=
+            powershellCommand;
     }
 
     fs.writeFileSync(
@@ -314,127 +742,186 @@ function installPowerShellWrapper() {
         "utf8"
     );
 
-    console.log(`✓ PowerShell wrapper installed (${profilePath})`);
+    console.log(
+        `✓ PowerShell wrapper installed (${profilePath})`
+    );
 }
 
-
 function configureCopilotSettings() {
-    const copilotHome = getCopilotHome();
+    const copilotHome =
+        getCopilotHome();
 
-    const settingsPath = path.join(
-        copilotHome,
-        "settings.json"
-    );
+    const settingsPath =
+        path.join(
+            copilotHome,
+            "settings.json"
+        );
 
     let settings = {};
 
     if (fs.existsSync(settingsPath)) {
-        try {
-            settings = JSON.parse(
-                fs.readFileSync(settingsPath, "utf8")
-            );
-        } catch (error) {
-            console.error("✗ Could not parse Copilot settings.json.");
-            console.error("  Aborting to avoid overwriting existing settings.");
-            process.exit(1);
-        }
+        settings = readJsonFile(
+            settingsPath,
+            "Copilot settings.json"
+        );
     }
 
     settings.updateTerminalTitle = false;
 
     fs.writeFileSync(
         settingsPath,
-        JSON.stringify(settings, null, 2) + "\n",
+        JSON.stringify(
+            settings,
+            null,
+            2
+        ) + "\n",
         "utf8"
     );
 
-    console.log("✓ Copilot terminal title updates disabled");
+    console.log(
+        "✓ Copilot terminal title updates disabled"
+    );
 }
 
 function verifyInstallation() {
-    const hooksDirectory = getHooksDirectory();
+    const hooksDirectory =
+        getHooksDirectory();
 
-    const notificationScriptPath = path.join(
-        hooksDirectory,
-        "copilot-notify.ps1"
-    );
+    const notificationScriptPath =
+        path.join(
+            hooksDirectory,
+            "copilot-notify.ps1"
+        );
 
-    const hookConfigPath = path.join(
-        hooksDirectory,
-        "notification-hooks.json"
-    );
+    const hookConfigPath =
+        path.join(
+            hooksDirectory,
+            "notification-hooks.json"
+        );
 
-    const profilePath = execFileSync(
-        "powershell.exe",
-        [
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "$PROFILE"
-        ],
-        {
-            encoding: "utf8"
-        }
-    ).trim();
+    const profilePath =
+        getPowerShellProfilePath();
 
     let valid = true;
 
-    if (!fs.existsSync(notificationScriptPath)) {
-        console.error("✗ Notification script verification failed");
+    if (
+        !fs.existsSync(
+            notificationScriptPath
+        )
+    ) {
+        console.error(
+            "✗ Notification script verification failed"
+        );
         valid = false;
     } else {
-        console.log("✓ Notification script verified");
+        console.log(
+            "✓ Notification script verified"
+        );
     }
 
-    if (!fs.existsSync(hookConfigPath)) {
-        console.error("✗ Hook configuration verification failed");
+    if (
+        !fs.existsSync(
+            hookConfigPath
+        )
+    ) {
+        console.error(
+            "✗ Hook configuration verification failed"
+        );
         valid = false;
     } else {
         try {
-            JSON.parse(
-                fs.readFileSync(hookConfigPath, "utf8")
-            );
+            const hooksConfig =
+                JSON.parse(
+                    fs.readFileSync(
+                        hookConfigPath,
+                        "utf8"
+                    )
+                );
 
-            console.log("✓ Hook configuration verified");
+            const serialized =
+                JSON.stringify(
+                    hooksConfig
+                );
+
+            if (
+                serialized.includes(
+                    "copilot-notify.ps1"
+                )
+            ) {
+                console.log(
+                    "✓ Hook configuration verified"
+                );
+            } else {
+                console.error(
+                    "✗ Copilot Notify hooks were not found"
+                );
+                valid = false;
+            }
         } catch {
-            console.error("✗ Hook configuration contains invalid JSON");
+            console.error(
+                "✗ Hook configuration contains invalid JSON"
+            );
             valid = false;
         }
     }
 
-    if (!fs.existsSync(profilePath)) {
-        console.error("✗ PowerShell profile verification failed");
+    if (
+        !fs.existsSync(profilePath)
+    ) {
+        console.error(
+            "✗ PowerShell profile verification failed"
+        );
         valid = false;
     } else {
-        const profileContent = fs.readFileSync(
-            profilePath,
-            "utf8"
-        );
+        const profileContent =
+            fs.readFileSync(
+                profilePath,
+                "utf8"
+            );
 
         if (
-            profileContent.includes("# >>> copilot-notify >>>") &&
-            profileContent.includes("# <<< copilot-notify <<<")
+            profileContent.includes(
+                "# >>> copilot-notify >>>"
+            ) &&
+            profileContent.includes(
+                "# <<< copilot-notify <<<"
+            )
         ) {
-            console.log("✓ PowerShell wrapper verified");
+            console.log(
+                "✓ PowerShell wrapper verified"
+            );
         } else {
-            console.error("✗ PowerShell wrapper was not found in profile");
+            console.error(
+                "✗ PowerShell wrapper was not found in profile"
+            );
             valid = false;
         }
     }
 
-    const settingsPath = path.join(
-        getCopilotHome(),
-        "settings.json"
-    );
+    const settingsPath =
+        path.join(
+            getCopilotHome(),
+            "settings.json"
+        );
 
-    if (fs.existsSync(settingsPath)) {
+    if (
+        fs.existsSync(settingsPath)
+    ) {
         try {
-            const settings = JSON.parse(
-                fs.readFileSync(settingsPath, "utf8")
-            );
+            const settings =
+                JSON.parse(
+                    fs.readFileSync(
+                        settingsPath,
+                        "utf8"
+                    )
+                );
 
-            if (settings.updateTerminalTitle === false) {
-                console.log("✓ Copilot terminal-title setting verified");
+            if (
+                settings.updateTerminalTitle === false
+            ) {
+                console.log(
+                    "✓ Copilot terminal-title setting verified"
+                );
             } else {
                 console.error(
                     "✗ updateTerminalTitle is not set to false"
@@ -442,29 +929,55 @@ function verifyInstallation() {
                 valid = false;
             }
         } catch {
-            console.error("✗ Could not verify Copilot settings");
+            console.error(
+                "✗ Could not verify Copilot settings"
+            );
             valid = false;
         }
     } else {
-        console.error("✗ Copilot settings.json not found");
+        console.error(
+            "✗ Copilot settings.json not found"
+        );
         valid = false;
+    }
+
+    if (
+        !fs.existsSync(
+            getInstallStatePath()
+        )
+    ) {
+        console.error(
+            "✗ Installation state was not created"
+        );
+        valid = false;
+    } else {
+        console.log(
+            "✓ Installation state verified"
+        );
     }
 
     if (!valid) {
         console.error("");
-        console.error("Installation verification failed.");
+        console.error(
+            "Installation verification failed."
+        );
         process.exit(1);
     }
 
     console.log("");
-    console.log("✓ Installation verified successfully");
+    console.log(
+        "✓ Installation verified successfully"
+    );
 }
-
 
 function main() {
     console.log("");
-    console.log("Copilot Notify installer");
-    console.log("-----------------------");
+    console.log(
+        "Copilot Notify installer"
+    );
+    console.log(
+        "-----------------------"
+    );
 
     checkWindows();
     checkPowerShell();
@@ -473,7 +986,36 @@ function main() {
     checkBurntToast();
     checkCopilotHooksDirectory();
 
-    backupExistingHookConfiguration();
+    const existingState =
+        loadInstallationState();
+
+    if (!existingState) {
+        saveInstallationState(
+            captureInstallationState()
+        );
+    } else {
+        checkInstallFileOwnership(
+            path.join(
+                getHooksDirectory(),
+                "copilot-notify.ps1"
+            ),
+            existingState.notificationScriptCreated,
+            existingState.notificationScriptHash,
+            "Notification script"
+        );
+
+        checkInstallFileOwnership(
+            path.join(
+                getHooksDirectory(),
+                "copilot-mascot.png"
+            ),
+            existingState.notificationIconCreated,
+            existingState.notificationIconHash,
+            "Copilot mascot"
+        );
+    }
+
+    validateExistingHookConfiguration();
 
     installNotificationScript();
     installNotificationIcon();
@@ -483,8 +1025,9 @@ function main() {
     verifyInstallation();
 
     console.log("");
-    console.log("Installation checks passed.");
-    
+    console.log(
+        "Installation checks passed."
+    );
 }
 
 main();
