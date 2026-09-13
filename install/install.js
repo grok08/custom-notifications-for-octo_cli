@@ -37,32 +37,25 @@ function checkPowerShell() {
 }
 
 function checkCopilot() {
-    const candidates = [
-        process.env.APPDATA
-            ? `${process.env.APPDATA}\\npm\\copilot.cmd`
-            : null,
+    try {
+        const version = execFileSync(
+            process.env.ComSpec || "cmd.exe",
+            [
+                "/d",
+                "/s",
+                "/c",
+                "copilot --version"
+            ],
+            {
+                stdio: "pipe",
+                encoding: "utf8"
+            }
+        ).trim();
 
-        process.env.LOCALAPPDATA
-            ? `${process.env.LOCALAPPDATA}\\Microsoft\\WindowsApps\\copilot.exe`
-            : null
-    ].filter(Boolean);
-
-    for (const candidate of candidates) {
-        try {
-            const version = execFileSync(
-                candidate,
-                ["--version"],
-                {
-                    stdio: "pipe",
-                    encoding: "utf8"
-                }
-            ).trim();
-
-            console.log(`✓ GitHub Copilot CLI detected (${version})`);
-            return;
-        } catch {
-            // Try the next candidate.
-        }
+        console.log(`✓ GitHub Copilot CLI detected (${version})`);
+        return;
+    } catch {
+        // Copilot CLI was not found or could not report its version.
     }
 
     console.error("✗ GitHub Copilot CLI was not detected.");
