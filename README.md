@@ -10,13 +10,7 @@ Instead of showing a toast every time Copilot finishes or needs input, the syste
 
 ## Install with npm
 
-The working notification system is now distributed as a **public npm package**. You can install it on a Windows machine with a single command:
-
-```powershell
-npm install -g copilot-notify
-```
-
-The installer configures the Copilot hooks, installs the Windows notification script and bundled Copilot mascot, adds the stable Terminal-title wrapper, sets `updateTerminalTitle` to `false`, and verifies the installation.
+The working notification system is distributed as the public npm package **`copilot-notify`**.
 
 ### Requirements
 
@@ -29,20 +23,103 @@ The package is designed for:
 - Node.js 18+
 - BurntToast
 
-The installer checks the required components and reports any missing dependency.
+Install BurntToast in Windows PowerShell before running the integration installer:
 
-### Verify the installation
+```powershell
+Install-Module BurntToast -Scope CurrentUser
+```
 
-After installation, start a new PowerShell session if needed so the profile wrapper is loaded, then run:
+If your PowerShell execution policy prevents BurntToast from loading:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+The package installer checks the required components and reports any missing dependency.
+
+### Installation lifecycle
+
+Installing the npm package installs the `copilot-notify` CLI. It does **not** configure Copilot automatically.
+
+#### 1. Install the CLI
+
+```powershell
+npm install -g copilot-notify
+```
+
+#### 2. Install the Copilot integration
+
+```powershell
+copilot-notify install
+```
+
+This configures the Copilot hooks, installs the Windows notification script and bundled Copilot mascot, installs the PowerShell `copilot` wrapper, configures the stable Terminal-tab identity, sets `updateTerminalTitle` to `false`, and records the installation state.
+
+#### 3. Verify the integration
 
 ```powershell
 copilot-notify status
+```
+
+You should see:
+
+```text
+Integration: installed
+```
+
+#### 4. Test notifications
+
+```powershell
 copilot-notify test
 ```
 
-`status` verifies the installed CLI entry point, while `test` sends a real Windows notification using the same PowerShell notification path used by Copilot hooks.
+This sends a real Windows notification through the same PowerShell notification path used by Copilot hooks.
+
+After running `copilot-notify install`, open a **new PowerShell/Windows Terminal session** so the installed `copilot` wrapper is loaded. Then start Copilot CLI normally.
+
+#### 5. Uninstall the integration
+
+When you no longer want the notification integration:
+
+```powershell
+copilot-notify uninstall
+```
+
+This removes or restores only configuration owned by Copilot Notify and preserves unrelated Copilot configuration where possible.
+
+#### 6. Remove the CLI
+
+After uninstalling the integration:
+
+```powershell
+npm uninstall -g copilot-notify
+```
+
+The complete lifecycle is therefore:
+
+```text
+npm install -g copilot-notify
+        ↓
+copilot-notify install
+        ↓
+      USE
+        ↓
+copilot-notify uninstall
+        ↓
+npm uninstall -g copilot-notify
+```
 
 ### Using the package
+
+There is no separate application to launch. Once the integration is installed, continue using GitHub Copilot CLI normally. The configured Copilot hooks automatically produce notifications when attention is needed:
+
+- Copilot needs permission.
+- Copilot needs additional input.
+- A background agent/subagent finishes.
+- The main Copilot agent finishes a turn.
+
+The notification is suppressed when the exact Copilot CLI Terminal tab is already selected.
+
 
 There is no separate application to launch. Once installed, continue using GitHub Copilot CLI normally. The configured Copilot hooks automatically produce notifications when attention is needed:
 
@@ -288,9 +365,10 @@ The recommended setup is the public npm package:
 
 ```powershell
 npm install -g copilot-notify
+copilot-notify install
 ```
 
-The installer performs the Windows-specific setup automatically:
+The npm command installs the CLI. The explicit `copilot-notify install` command performs the Windows-specific setup:
 
 1. Checks Windows PowerShell, GitHub Copilot CLI, Windows Terminal, Node.js, and BurntToast.
 2. Creates the Copilot hooks directory.
@@ -419,7 +497,7 @@ Current limitations include:
 
 ## Future direction
 
-The core npm distribution is working and publicly installable as `copilot-notify@0.1.0`. The next improvements are focused on making upgrades, recovery, and configuration safer rather than changing the core notification architecture.
+The core npm distribution is working and publicly installable as `copilot-notify@0.1.3`. The next improvements are focused on making upgrades, recovery, and configuration safer rather than changing the core notification architecture.
 
 Potential future additions include:
 
@@ -440,7 +518,7 @@ https://grok08.github.io/custom-notifications-for-octo_cli/
 
 ## Project status
 
-**Status: Working npm MVP — `copilot-notify@0.1.0` is publicly published.**
+**Status: Working npm MVP — `copilot-notify@0.1.3` is publicly published.**
 
 The implementation has been manually verified for:
 
@@ -450,12 +528,22 @@ The implementation has been manually verified for:
 - VS Code Copilot completion without generating a notification.
 - The bundled Copilot mascot appearing in the real Windows toast.
 - Fresh installation from the public npm registry.
+- Explicit `copilot-notify install` / `copilot-notify uninstall` lifecycle.
 - `copilot-notify status` and `copilot-notify test`.
+- Published package validation on a second Windows machine.
 
 Public package:
 
-```text
+```powershell
 npm install -g copilot-notify
+copilot-notify install
+```
+
+To remove the integration and then the CLI:
+
+```powershell
+copilot-notify uninstall
+npm uninstall -g copilot-notify
 ```
 
 ## Author
